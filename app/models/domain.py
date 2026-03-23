@@ -1,7 +1,7 @@
 from typing import List, Optional
 from pydantic import BaseModel, Field
 from app.core.config_models import Status
-from datetime import datetime
+from datetime import datetime, timezone
 
 class User(BaseModel):
     """
@@ -28,7 +28,7 @@ class User(BaseModel):
     last_name: Optional[str] = Field(None, description="Applicant's last name")
     
     # Audit trail
-    created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of registration")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc),description="Timestamp of registration")
     
     # State tracking
     current_step: Optional[str] = Field(default=None, description="Current step ID")
