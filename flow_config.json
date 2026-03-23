@@ -1,0 +1,159 @@
+{
+  "default_steps": [
+    {
+      "name": "personal_details",
+      "display_name": "Personal Details Form",
+      "tasks": ["submit_personal_details"]
+    },
+    {
+      "name": "iq_test",
+      "display_name": "IQ Test",
+      "tasks": ["perform_iq_test"]
+    },
+    {
+      "name": "interview",
+      "display_name": "Interview",
+      "tasks": ["schedule_interview", "perform_interview"]
+    },
+    {
+      "name": "sign_contract",
+      "display_name": "Sign Contract",
+      "tasks": ["upload_identification_document", "sign_contract_task"]
+    },
+    {
+      "name": "payment",
+      "display_name": "Payment",
+      "tasks": ["process_payment"]
+    },
+    {
+      "name": "join_slack",
+      "display_name": "Join Slack",
+      "tasks": ["join_slack_task"]
+    }
+  ],
+  "tasks_map": {
+    "submit_personal_details": {
+      "name": "submit_personal_details",
+      "pass_condition_type": "AUTO_PASS",
+      "transitions": [
+        {
+          "condition": "DEFAULT",
+          "next_step": "iq_test",
+          "next_task": "perform_iq_test"
+        }
+      ]
+    },
+    "perform_iq_test": {
+      "name": "perform_iq_test",
+      "pass_condition_type": "EVALUATE_PAYLOAD",
+      "transitions": [
+        {
+          "condition": "payload.get('score', 0) > 75",
+          "next_step": "interview",
+          "next_task": "schedule_interview"
+        },
+        {
+          "condition": "payload.get('score', 0) >= 60 and payload.get('score', 0) <= 75",
+          "next_step": "iq_test",
+          "next_task": "second_chance_iq"
+        },
+        {
+          "condition": "DEFAULT",
+          "next_step": "TERMINAL_REJECTED",
+          "next_task": "NONE",
+          "mark_status": "REJECTED"
+        }
+      ]
+    },
+    "second_chance_iq": {
+      "name": "second_chance_iq",
+      "pass_condition_type": "EVALUATE_PAYLOAD",
+      "transitions": [
+        {
+          "condition": "payload.get('score', 0) > 75",
+          "next_step": "interview",
+          "next_task": "schedule_interview"
+        },
+        {
+          "condition": "DEFAULT",
+          "next_step": "TERMINAL_REJECTED",
+          "next_task": "NONE",
+          "mark_status": "REJECTED"
+        }
+      ]
+    },
+    "schedule_interview": {
+      "name": "schedule_interview",
+      "pass_condition_type": "AUTO_PASS",
+      "transitions": [
+        {
+          "condition": "DEFAULT",
+          "next_step": "interview",
+          "next_task": "perform_interview"
+        }
+      ]
+    },
+    "perform_interview": {
+      "name": "perform_interview",
+      "pass_condition_type": "EVALUATE_PAYLOAD",
+      "transitions": [
+        {
+          "condition": "payload.get('decision') == 'passed_interview'",
+          "next_step": "sign_contract",
+          "next_task": "upload_identification_document"
+        },
+        {
+          "condition": "DEFAULT",
+          "next_step": "TERMINAL_REJECTED",
+          "next_task": "NONE",
+          "mark_status": "REJECTED"
+        }
+      ]
+    },
+    "upload_identification_document": {
+      "name": "upload_identification_document",
+      "pass_condition_type": "AUTO_PASS",
+      "transitions": [
+        {
+          "condition": "DEFAULT",
+          "next_step": "sign_contract",
+          "next_task": "sign_contract_task"
+        }
+      ]
+    },
+    "sign_contract_task": {
+      "name": "sign_contract_task",
+      "pass_condition_type": "AUTO_PASS",
+      "transitions": [
+        {
+          "condition": "DEFAULT",
+          "next_step": "payment",
+          "next_task": "process_payment"
+        }
+      ]
+    },
+    "process_payment": {
+      "name": "process_payment",
+      "pass_condition_type": "AUTO_PASS",
+      "transitions": [
+        {
+          "condition": "DEFAULT",
+          "next_step": "join_slack",
+          "next_task": "join_slack_task"
+        }
+      ]
+    },
+    "join_slack_task": {
+      "name": "join_slack_task",
+      "pass_condition_type": "AUTO_PASS",
+      "transitions": [
+        {
+          "condition": "DEFAULT",
+          "next_step": "TERMINAL_ACCEPTED",
+          "next_task": "NONE",
+          "mark_status": "ACCEPTED"
+        }
+      ]
+    }
+  }
+}
