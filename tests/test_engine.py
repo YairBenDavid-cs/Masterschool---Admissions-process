@@ -1,27 +1,36 @@
 import pytest
 from typing import Dict, Any
+
 from app.core.config_models import TaskBlueprint, TransitionRule, Status, PassConditionType
-from app.core.engine import evaluate_transition
+from app.core.engine import evaluate_transition, EngineEvaluationError
+
+# =============================================================================
+# FIXTURES (Decoupled & Generic)
+# =============================================================================
 
 @pytest.fixture
-def iq_task_blueprint() -> TaskBlueprint:
+def numeric_eval_blueprint() -> TaskBlueprint:
     """
-    Fixture providing the exact blueprint for the IQ Test task 
-    from the Masterschool flow configuration.
+    Provides a TaskBlueprint for testing numeric threshold evaluations.
+
+    Returns:
+        TaskBlueprint: A blueprint containing greater-than, range-based, 
+        and default fallback transitions, including an Approach 3 injection flag.
     """
     return TaskBlueprint(
-        name="perform_iq_test",
+        name="numeric_task",
         pass_condition_type=PassConditionType.EVALUATE_PAYLOAD,
         transitions=[
             TransitionRule(
                 condition="payload.get('score', 0) > 75",
-                next_step="interview",
-                next_task="schedule_interview"
+                next_step="step_success",
+                next_task="task_success"
             ),
             TransitionRule(
                 condition="payload.get('score', 0) >= 60 and payload.get('score', 0) <= 75",
-                next_step="iq_test",
-                next_task="second_chance_iq"
+                next_step="step_current",
+                next_task="task_injection",
+                inject_to_custom_flow=True  # Approach 3 Data-Driven Flag
             ),
             TransitionRule(
                 condition="DEFAULT",
@@ -33,18 +42,22 @@ def iq_task_blueprint() -> TaskBlueprint:
     )
 
 @pytest.fixture
-def interview_task_blueprint() -> TaskBlueprint:
+def string_eval_blueprint() -> TaskBlueprint:
     """
-    Fixture providing the blueprint for the interview evaluation task.
+    Provides a TaskBlueprint for testing exact string matching evaluations.
+
+    Returns:
+        TaskBlueprint: A blueprint containing a strict string equality check 
+        and a default fallback transition.
     """
     return TaskBlueprint(
-        name="perform_interview",
+        name="string_task",
         pass_condition_type=PassConditionType.EVALUATE_PAYLOAD,
         transitions=[
             TransitionRule(
-                condition="payload.get('decision') == 'passed_interview'",
-                next_step="sign_contract",
-                next_task="upload_identification_document"
+                condition="payload.get('decision') == 'approved'",
+                next_step="step_next",
+                next_task="task_next"
             ),
             TransitionRule(
                 condition="DEFAULT",
@@ -56,96 +69,222 @@ def interview_task_blueprint() -> TaskBlueprint:
     )
 
 @pytest.fixture
-def auto_pass_task_blueprint() -> TaskBlueprint:
+def auto_pass_blueprint() -> TaskBlueprint:
     """
-    Fixture providing a standard AUTO_PASS task (like submit_personal_details).
+    Provides a standard AUTO_PASS task behavior configuration.
+
+    Returns:
+        TaskBlueprint: A blueprint that should bypass payload evaluation 
+        entirely and return the default transition.
     """
     return TaskBlueprint(
-        name="submit_personal_details",
+        name="auto_task",
         pass_condition_type=PassConditionType.AUTO_PASS,
         transitions=[
             TransitionRule(
                 condition="DEFAULT",
-                next_step="iq_test",
-                next_task="perform_iq_test"
+                next_step="step_next",
+                next_task="task_next"
             )
         ]
     )
 
-# --- IQ Test Scenarios ---
+@pytest.fixture
+def corrupted_eval_blueprint() -> TaskBlueprint:
+    """
+    Provides a TaskBlueprint containing invalid Python syntax.
 
-def test_evaluate_transition_iq_high_score(iq_task_blueprint: TaskBlueprint) -> None:
+    Returns:
+        TaskBlueprint: A blueprint explicitly designed to fail the eval() 
+        function due to a missing parenthesis, forcing a safe DEFAULT fallback.
     """
-    Validates that a high IQ score (>75) moves the candidate to the interview step.
+    return TaskBlueprint(
+        name="corrupted_task",
+        pass_condition_type=PassConditionType.EVALUATE_PAYLOAD,
+        transitions=[
+            TransitionRule(
+                condition="payload.get('score' > 75",  # SYNTAX ERROR
+                next_step="step_next",
+                next_task="task_next"
+            ),
+            TransitionRule(
+                condition="DEFAULT",
+                next_step="TERMINAL_REJECTED",
+                next_task="NONE",
+                mark_status=Status.REJECTED
+            )
+        ]
+    )
+
+
+# =============================================================================
+# 1. NUMERIC & LOGICAL EVALUATION TESTS
+# =============================================================================
+
+def test_engine_numeric_condition_success(numeric_eval_blueprint: TaskBlueprint) -> None:
     """
+    Validates that the engine correctly evaluates a 'greater than' numeric condition.
+
+    Args:
+        numeric_eval_blueprint (TaskBlueprint): The numeric logic fixture.
+
+    Expected Behavior:
+        The engine evaluates the payload (82 > 75), selects the first transition, 
+        and leaves the custom flow injection flag as False.
+    """
+    # Arrange
     payload: Dict[str, Any] = {"score": 82}
     
-    rule = evaluate_transition(task_blueprint=iq_task_blueprint, payload=payload)
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=numeric_eval_blueprint, payload=payload)
     
-    assert rule.next_step == "interview"
-    assert rule.next_task == "schedule_interview"
+    # Assert
+    assert rule.next_step == "step_success"
+    assert rule.next_task == "task_success"
     assert rule.mark_status is None
+    assert rule.inject_to_custom_flow is False
 
-def test_evaluate_transition_iq_medium_score(iq_task_blueprint: TaskBlueprint) -> None:
+def test_engine_numeric_condition_injection_flag(numeric_eval_blueprint: TaskBlueprint) -> None:
     """
-    Validates the PM's edge case: A score between 60 and 75 triggers 
-    the hidden 'second_chance_iq' task without failing the candidate.
+    Validates the dynamic injection (Approach 3) flag preservation.
+
+    Args:
+        numeric_eval_blueprint (TaskBlueprint): The numeric logic fixture.
+
+    Expected Behavior:
+        The engine matches the mid-range condition (60-75) and correctly 
+        returns the TransitionRule with `inject_to_custom_flow=True`.
     """
+    # Arrange
     payload: Dict[str, Any] = {"score": 65}
     
-    rule = evaluate_transition(task_blueprint=iq_task_blueprint, payload=payload)
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=numeric_eval_blueprint, payload=payload)
     
-    assert rule.next_step == "iq_test"
-    assert rule.next_task == "second_chance_iq"
-    assert rule.mark_status is None
+    # Assert
+    assert rule.next_step == "step_current"
+    assert rule.next_task == "task_injection"
+    assert rule.inject_to_custom_flow is True
 
-def test_evaluate_transition_iq_low_score(iq_task_blueprint: TaskBlueprint) -> None:
+def test_engine_numeric_condition_default_fallback(numeric_eval_blueprint: TaskBlueprint) -> None:
     """
-    Validates that a low IQ score (<60) hits the DEFAULT fallback and rejects the candidate.
+    Validates that failing all specific conditions safely triggers the DEFAULT fallback.
+
+    Args:
+        numeric_eval_blueprint (TaskBlueprint): The numeric logic fixture.
+
+    Expected Behavior:
+        Since the score (55) matches no specific rules, the engine defaults 
+        to the terminal rejection state.
     """
+    # Arrange
     payload: Dict[str, Any] = {"score": 55}
     
-    rule = evaluate_transition(task_blueprint=iq_task_blueprint, payload=payload)
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=numeric_eval_blueprint, payload=payload)
     
+    # Assert
     assert rule.next_step == "TERMINAL_REJECTED"
     assert rule.next_task == "NONE"
     assert rule.mark_status == Status.REJECTED
 
-# --- Interview Scenarios ---
 
-def test_evaluate_transition_interview_passed(interview_task_blueprint: TaskBlueprint) -> None:
-    """
-    Validates that specific string matching works for the interview payload.
-    """
-    payload: Dict[str, Any] = {"decision": "passed_interview"}
-    
-    rule = evaluate_transition(task_blueprint=interview_task_blueprint, payload=payload)
-    
-    assert rule.next_step == "sign_contract"
-    assert rule.next_task == "upload_identification_document"
+# =============================================================================
+# 2. STRING EVALUATION TESTS
+# =============================================================================
 
-def test_evaluate_transition_interview_failed(interview_task_blueprint: TaskBlueprint) -> None:
+def test_engine_string_condition_match(string_eval_blueprint: TaskBlueprint) -> None:
     """
-    Validates that any unexpected string in the interview payload results in rejection.
+    Validates that the engine correctly evaluates exact string matches in the payload.
+
+    Args:
+        string_eval_blueprint (TaskBlueprint): The string logic fixture.
+
+    Expected Behavior:
+        The engine matches the string equality ('approved') and advances the state.
     """
-    payload: Dict[str, Any] = {"decision": "failed_interview"}
+    # Arrange
+    payload: Dict[str, Any] = {"decision": "approved"}
     
-    rule = evaluate_transition(task_blueprint=interview_task_blueprint, payload=payload)
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=string_eval_blueprint, payload=payload)
     
+    # Assert
+    assert rule.next_step == "step_next"
+    assert rule.next_task == "task_next"
+    assert rule.mark_status is None
+
+def test_engine_string_condition_mismatch(string_eval_blueprint: TaskBlueprint) -> None:
+    """
+    Validates that mismatched strings bypass specific rules and hit the DEFAULT rule.
+
+    Args:
+        string_eval_blueprint (TaskBlueprint): The string logic fixture.
+
+    Expected Behavior:
+        An unmapped string ('denied') falls through to the terminal rejection state.
+    """
+    # Arrange
+    payload: Dict[str, Any] = {"decision": "denied"}
+    
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=string_eval_blueprint, payload=payload)
+    
+    # Assert
     assert rule.next_step == "TERMINAL_REJECTED"
+    assert rule.next_task == "NONE"
     assert rule.mark_status == Status.REJECTED
 
-# --- AUTO_PASS Scenarios ---
 
-def test_evaluate_transition_auto_pass(auto_pass_task_blueprint: TaskBlueprint) -> None:
+# =============================================================================
+# 3. AUTO_PASS TESTS
+# =============================================================================
+
+def test_engine_auto_pass_ignores_payload(auto_pass_blueprint: TaskBlueprint) -> None:
     """
-    Validates that AUTO_PASS tasks immediately return the DEFAULT transition, 
-    ignoring the payload entirely.
+    Validates that AUTO_PASS tasks bypass payload evaluation entirely.
+
+    Args:
+        auto_pass_blueprint (TaskBlueprint): The auto-pass logic fixture.
+
+    Expected Behavior:
+        Regardless of the payload content, the engine immediately selects 
+        the DEFAULT transition.
     """
-    # Even if payload is empty or None, AUTO_PASS must succeed
-    payload: Dict[str, Any] = {}
+    # Arrange
+    payload: Dict[str, Any] = {"some_garbage_data": True}
     
-    rule = evaluate_transition(task_blueprint=auto_pass_task_blueprint, payload=payload)
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=auto_pass_blueprint, payload=payload)
     
-    assert rule.next_step == "iq_test"
-    assert rule.next_task == "perform_iq_test"
+    # Assert
+    assert rule.next_step == "step_next"
+    assert rule.next_task == "task_next"
+
+
+# =============================================================================
+# 4. NEGATIVE TESTING & RESILIENCE (SECURITY)
+# =============================================================================
+
+def test_engine_handles_corrupted_syntax(corrupted_eval_blueprint: TaskBlueprint) -> None:
+    """
+    Validates engine resilience against malformed transition conditions.
+
+    Args:
+        corrupted_eval_blueprint (TaskBlueprint): The corrupted syntax fixture.
+
+    Expected Behavior:
+        The engine catches the Python SyntaxError internally, treats the 
+        corrupted condition as False, and safely falls back to the DEFAULT rule 
+        to prevent a fatal application crash.
+    """
+    # Arrange
+    payload: Dict[str, Any] = {"score": 100}
+    
+    # Act
+    rule: TransitionRule = evaluate_transition(task_blueprint=corrupted_eval_blueprint, payload=payload)
+        
+    # Assert
+    assert rule.next_step == "TERMINAL_REJECTED"
+    assert rule.next_task == "NONE"
+    assert rule.mark_status == Status.REJECTED

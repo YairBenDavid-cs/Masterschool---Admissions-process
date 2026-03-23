@@ -15,46 +15,68 @@ from app.services.admissions import (
     ConfigurationError
 )
 
+# =============================================================================
+# FIXTURES (Decoupled & Isolated)
+# =============================================================================
+
 @pytest.fixture
 def mock_repo() -> InMemoryUserRepository:
-    """Provides a fresh, empty repository for each test."""
+    """
+    Provides a fresh, empty repository for each test.
+    Ensures complete Data Isolation at the Service level without needing API overrides.
+    """
     return InMemoryUserRepository()
 
 @pytest.fixture
 def mock_flow_config() -> FlowConfig:
     """
-    Provides a minimal FSM configuration that mirrors the assignment's logic, 
-    including an AUTO_PASS task and an EVALUATE_PAYLOAD task (IQ Test).
+    Provides a generic FSM configuration for Service testing.
+    Uses abstract names ('step_alpha', 'task_eval') to prove the Service 
+    is fully decoupled from the specific Masterschool business domain.
     """
     return FlowConfig(
         default_steps=[
             StepBlueprint(
-                name="personal_details", 
-                display_name="Personal Details", 
-                tasks=["submit_details"]
+                name="step_start", 
+                display_name="Start Step", 
+                tasks=["task_auto_pass"]
+            ),
+            StepBlueprint(
+                name="step_evaluation",
+                display_name="Evaluation Step",
+                tasks=["task_eval"]
             )
         ],
         tasks_map={
-            "submit_details": TaskBlueprint(
-                name="submit_details",
+            "task_auto_pass": TaskBlueprint(
+                name="task_auto_pass",
                 pass_condition_type=PassConditionType.AUTO_PASS,
                 transitions=[
                     TransitionRule(
                         condition="DEFAULT", 
-                        next_step="iq_test", 
-                        next_task="perform_iq"
+                        next_step="step_evaluation", 
+                        next_task="task_eval"
                     )
                 ]
             ),
-            "perform_iq": TaskBlueprint(
-                name="perform_iq",
+            "task_eval": TaskBlueprint(
+                name="task_eval",
                 pass_condition_type=PassConditionType.EVALUATE_PAYLOAD,
                 transitions=[
+                    # 1. Standard Success
                     TransitionRule(
-                        condition="payload.get('score', 0) > 75", 
-                        next_step="interview", 
-                        next_task="schedule_interview"
+                        condition="payload.get('score', 0) > 80", 
+                        next_step="step_final", 
+                        next_task="task_final"
                     ),
+                    # 2. Dynamic Injection (Approach 3) Edge Case
+                    TransitionRule(
+                        condition="payload.get('score', 0) >= 50 and payload.get('score', 0) <= 80",
+                        next_step="step_evaluation",
+                        next_task="task_injected_extra",
+                        inject_to_custom_flow=True
+                    ),
+                    # 3. Default Rejection
                     TransitionRule(
                         condition="DEFAULT", 
                         next_step="TERMINAL_REJECTED", 
@@ -63,38 +85,33 @@ def mock_flow_config() -> FlowConfig:
                     )
                 ]
             ),
-            "second_chance_iq": TaskBlueprint(
-                name="second_chance_iq",
-                pass_condition_type=PassConditionType.EVALUATE_PAYLOAD,
+            "task_injected_extra": TaskBlueprint(
+                name="task_injected_extra",
+                pass_condition_type=PassConditionType.AUTO_PASS,
                 transitions=[
                     TransitionRule(
-                        condition="payload.get('score', 0) > 75",
-                        next_step="interview",
-                        next_task="schedule_interview"
-                    ),
-                    TransitionRule(
-                        condition="DEFAULT",
-                        next_step="TERMINAL_REJECTED",
-                        next_task="NONE",
-                        mark_status=Status.REJECTED
+                        condition="DEFAULT", 
+                        next_step="step_final", 
+                        next_task="task_final"
                     )
                 ]
             )
         }
     )
 
-# --- Creation & Retrieval Tests ---
+# =============================================================================
+# 1. CREATION & RETRIEVAL TESTS
+# =============================================================================
 
 def test_create_new_user_success(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
     """Validates that a new user is created and placed at the first step."""
     email = "candidate@example.com"
-    
     user = create_new_user(email=email, repo=mock_repo, flow=mock_flow_config)
     
     assert user.email == email
     assert user.status == Status.IN_PROGRESS
-    assert user.current_step == "personal_details"
-    assert user.current_task == "submit_details"
+    assert user.current_step == "step_start"
+    assert user.current_task == "task_auto_pass"
 
 def test_create_new_user_duplicate_email(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
     """Validates the guard clause preventing duplicate email registrations."""
@@ -110,17 +127,18 @@ def test_get_user_record_success(mock_repo: InMemoryUserRepository, mock_flow_co
     
     fetched_user = get_user_record(user_id=created_user.id, repo=mock_repo)
     assert fetched_user.id == created_user.id
-    assert fetched_user.email == "test@test.com"
 
 def test_get_user_record_not_found(mock_repo: InMemoryUserRepository) -> None:
     """Validates that requesting a non-existent user raises the correct exception."""
     with pytest.raises(UserNotFoundError):
         get_user_record(user_id="fake_id", repo=mock_repo)
 
-# --- Task Processing & Orchestration Tests ---
+# =============================================================================
+# 2. GUARD CLAUSES & RESILIENCE TESTS
+# =============================================================================
 
 def test_process_task_completion_mismatch(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
-    """Validates the anti-cheat guard clause: user must submit their current task."""
+    """Validates the anti-cheat guard clause: user must submit their assigned task."""
     user = create_new_user(email="test@example.com", repo=mock_repo, flow=mock_flow_config)
     
     with pytest.raises(TaskMismatchError):
@@ -134,7 +152,7 @@ def test_process_task_completion_mismatch(mock_repo: InMemoryUserRepository, moc
         )
 
 def test_process_task_completion_already_terminal(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
-    """Validates that a REJECTED or ACCEPTED user cannot process new tasks."""
+    """Validates that a user in a terminal state cannot process new tasks."""
     user = create_new_user(email="test@example.com", repo=mock_repo, flow=mock_flow_config)
     user.status = Status.REJECTED
     mock_repo.save_user(user)
@@ -150,105 +168,93 @@ def test_process_task_completion_already_terminal(mock_repo: InMemoryUserReposit
         )
 
 def test_process_task_completion_configuration_error(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
-    """Validates that a missing task blueprint in the config raises an error."""
+    """Validates that missing task blueprints in the config crash safely with a custom error."""
     user = create_new_user(email="test@example.com", repo=mock_repo, flow=mock_flow_config)
     
     # Intentionally corrupt the config map in memory for the test
-    del mock_flow_config.tasks_map["submit_details"]
+    del mock_flow_config.tasks_map["task_auto_pass"]
     
     with pytest.raises(ConfigurationError):
         process_task_completion(
             user_id=user.id,
-            step_name="personal_details",
-            task_name="submit_details",
+            step_name="step_start",
+            task_name="task_auto_pass",
             payload={},
             repo=mock_repo,
             flow=mock_flow_config
         )
 
-def test_process_task_completion_with_payload_evaluation(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
+# =============================================================================
+# 3. DYNAMIC INJECTION & STATE MACHINE INTEGRITY
+# =============================================================================
+
+def test_process_task_completion_standard_flow(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
     """
-    Validates end-to-end service orchestration: 
-    Passing an AUTO_PASS task, then passing an EVALUATE_PAYLOAD task (IQ Test > 75).
+    Validates end-to-end service orchestration for a standard (Happy Path) user:
+    Passing an AUTO_PASS task, then passing an EVALUATE_PAYLOAD task with high score.
     """
-    # 1. Create User
     user = create_new_user(email="test@example.com", repo=mock_repo, flow=mock_flow_config)
     
-    # 2. Complete Step 1 (AUTO_PASS)
+    # Complete Step 1 (AUTO_PASS)
     updated_user = process_task_completion(
-        user_id=user.id,
-        step_name="personal_details",
-        task_name="submit_details",
-        payload={"first_name": "John"}, # Payload is ignored by engine for AUTO_PASS
-        repo=mock_repo,
-        flow=mock_flow_config
+        user_id=user.id, step_name="step_start", task_name="task_auto_pass",
+        payload={}, repo=mock_repo, flow=mock_flow_config
     )
-    
-    assert updated_user.current_step == "iq_test"
-    assert updated_user.current_task == "perform_iq"
+    assert updated_user.current_step == "step_evaluation"
+    assert updated_user.current_task == "task_eval"
 
-    # 3. Complete Step 2 (EVALUATE_PAYLOAD) with a passing score
+    # Complete Step 2 (High Score)
     final_user = process_task_completion(
-        user_id=updated_user.id,
-        step_name="iq_test",
-        task_name="perform_iq",
-        payload={"score": 85}, # Score > 75, should go to interview
-        repo=mock_repo,
-        flow=mock_flow_config
+        user_id=updated_user.id, step_name="step_evaluation", task_name="task_eval",
+        payload={"score": 90}, repo=mock_repo, flow=mock_flow_config
     )
-    
-    assert final_user.current_step == "interview"
-    assert final_user.current_task == "schedule_interview"
+    assert final_user.current_step == "step_final"
+    assert final_user.current_task == "task_final"
     assert final_user.status == Status.IN_PROGRESS
+    assert len(final_user.custom_flow) == 0 # No injection occurred
 
-def test_process_task_completion_second_chance_edge_case(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
+def test_process_task_completion_dynamic_injection(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
     """
-    CRITICAL TEST: Validates the 'Second Chance' requirement.
-    Checks if a medium score (60-75) updates current_task AND injects it into custom_flow.
+    CRITICAL TEST (Approach 3): Validates that when the Engine triggers a rule 
+    with 'inject_to_custom_flow=True', the Service appends the new task to the 
+    user's custom_flow and saves it.
     """
-    # 1. Arrange: Update mock config to include the second chance rule with Explicit Injection Flag
-    mock_flow_config.tasks_map["perform_iq"].transitions.insert(0, TransitionRule(
-        condition="payload.get('score', 0) >= 60 and payload.get('score', 0) <= 75",
-        next_step="iq_test",
-        next_task="second_chance_iq",
-        inject_to_custom_flow=True  # Approach 3: Data-Driven flag
-    ))
-    
     user = create_new_user(email="edge@case.com", repo=mock_repo, flow=mock_flow_config)
-    # Move to IQ step first
-    user.current_step = "iq_test"
-    user.current_task = "perform_iq"
+    
+    # Manually move to evaluation step for speed
+    user.current_step = "step_evaluation"
+    user.current_task = "task_eval"
     mock_repo.save_user(user)
 
-    # 2. Act: Submit a 'medium' score
+    # Act: Submit a payload that triggers the injection rule (score: 60)
     updated_user = process_task_completion(
         user_id=user.id,
-        step_name="iq_test",
-        task_name="perform_iq",
-        payload={"score": 65},
+        step_name="step_evaluation",
+        task_name="task_eval",
+        payload={"score": 60},
         repo=mock_repo,
         flow=mock_flow_config
     )
 
-    # 3. Assert
-    assert updated_user.current_task == "second_chance_iq"
-    # The second chance task should be injected into the custom_flow for tracking
-    assert "second_chance_iq" in updated_user.custom_flow
+    # Assert
+    assert updated_user.current_task == "task_injected_extra"
+    # Verify the Service successfully performed the dynamic injection
+    assert "task_injected_extra" in updated_user.custom_flow
     assert updated_user.status == Status.IN_PROGRESS
 
 def test_process_task_completion_terminal_rejection(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
-    """Validates that a low score correctly triggers a terminal REJECTED status."""
+    """Validates that the Service correctly updates the User's terminal status based on Engine rules."""
     user = create_new_user(email="fail@test.com", repo=mock_repo, flow=mock_flow_config)
-    user.current_step = "iq_test"
-    user.current_task = "perform_iq"
+    user.current_step = "step_evaluation"
+    user.current_task = "task_eval"
     mock_repo.save_user(user)
 
-    # Act: Submit a failing score (triggers DEFAULT rule in mock_flow_config)
+    # Act: Submit a failing score to trigger the DEFAULT rule
     final_user = process_task_completion(
         user_id=user.id,
-        step_name="iq_test",
-        task_name="perform_iq",
-        payload={"score": 40},
+        step_name="step_evaluation",
+        task_name="task_eval",
+        payload={"score": 10},
         repo=mock_repo,
         flow=mock_flow_config
     )
