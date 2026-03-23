@@ -55,7 +55,8 @@
         {
           "condition": "payload.get('score', 0) >= 60 and payload.get('score', 0) <= 75",
           "next_step": "iq_test",
-          "next_task": "second_chance_iq"
+          "next_task": "second_chance_iq",
+          "inject_to_custom_flow": true
         },
         {
           "condition": "DEFAULT",

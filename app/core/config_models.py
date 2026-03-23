@@ -26,11 +26,17 @@ class TransitionRule(BaseModel):
         next_step (str): The ID of the next step. Can be a terminal state like 'TERMINAL_REJECTED'.
         next_task (str): The ID of the next task, or 'NONE' if terminating.
         mark_status (Optional[Status]): If reached, updates the user's overall status (e.g., ACCEPTED/REJECTED).
+        inject_to_custom_flow (bool): Whether to inject the next_task into the user's custom flow list.
     """
     condition: str = Field(..., description="The python-evaluable condition, or 'DEFAULT'")
     next_step: str = Field(..., description="The ID of the next step (or terminal state)")
     next_task: str = Field(..., description="The ID of the next task (or 'NONE')")
     mark_status: Optional[Status] = Field(default=None, description="Updates overall status if reached")
+    
+    inject_to_custom_flow: bool = Field(
+        default=False, 
+        description="Whether to inject the next_task into the user's custom flow list"
+    )
 
 class TaskBlueprint(BaseModel):
     """
