@@ -4,6 +4,10 @@ uvicorn[standard]==0.27.1
 
 # Data Validation & Modeling
 pydantic==2.6.3
+pydantic-settings>=2.0.0
+
+# --- Dependencies for Specific Pydantic Types ---
+email-validator>=2.0.0
 
 # Testing
 pytest==8.1.1
