@@ -109,21 +109,57 @@ def test_create_user_and_discover_start():
     assert "user_id" in data
     assert data["current_step"] == expected_first_step
     assert data["current_task"] == expected_first_task
-
-def test_get_user_status_hateoas_progress():
-    """
-    GET /users/{id}/status - Validates that progress info (e.g., step index) 
-    is calculated correctly based on the blueprint.
-    """
-    user_id = client.post("/api/v1/users", json={"email": "progress@test.com"}).json()["user_id"]
     
-    response = client.get(f"/api/v1/users/{user_id}/status")
-    assert response.status_code == 200
+    # HATEOAS Links Validation
+    assert "_links" in data
+    assert "next_action" in data["_links"]
+    assert data["_links"]["next_action"]["method"] == "PUT"
+
+def test_hateoas_progress_in_responses():
+    """
+    Validates that progress info (e.g., step index) is calculated correctly 
+    based on the blueprint and returned on state-changing actions (like POST).
+    """
+    response = client.post("/api/v1/users", json={"email": "progress@test.com"})
+    assert response.status_code == 201
     data = response.json()
     
     assert "progress" in data
     assert data["progress"]["current_step_index"] == 1
     assert data["progress"]["total_steps"] == len(get_flow_blueprint()["steps"])
+    
+    # Validation for the new is_terminal flag
+    assert "is_terminal" in data["progress"]
+    assert data["progress"]["is_terminal"] is False
+
+def test_get_user_current_step_and_task():
+    """
+    GET /users/{id}/current - Validates the optimized endpoint returns 
+    ONLY the current step and task.
+    """
+    user_id = client.post("/api/v1/users", json={"email": "current@test.com"}).json()["user_id"]
+    
+    response = client.get(f"/api/v1/users/{user_id}/current")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "current_step" in data
+    assert "current_task" in data
+    assert "status" not in data  # Proving it is optimized/isolated
+
+def test_get_user_overarching_status():
+    """
+    GET /users/{id}/status - Validates the optimized endpoint returns 
+    ONLY the overarching status (ACCEPTED, REJECTED, IN_PROGRESS).
+    """
+    user_id = client.post("/api/v1/users", json={"email": "status@test.com"}).json()["user_id"]
+    
+    response = client.get(f"/api/v1/users/{user_id}/status")
+    assert response.status_code == 200
+    data = response.json()
+    
+    assert "status" in data
+    assert "current_step" not in data  # Proving it is optimized/isolated
 
 
 # --- 2. Dynamic Logic & Step Navigation ---
