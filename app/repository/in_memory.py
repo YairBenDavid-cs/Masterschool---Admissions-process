@@ -72,3 +72,20 @@ class InMemoryUserRepository(UserRepository):
             return None
             
         return self.get_user(user_id)
+
+
+# =============================================================================
+# FASTAPI DEPENDENCY INJECTION
+# =============================================================================
+
+# Singleton instance to persist data across HTTP requests
+_global_in_memory_repo = InMemoryUserRepository()
+
+def get_repo() -> UserRepository:
+    """
+    FastAPI dependency provider for the User Repository.
+    
+    Returns:
+        UserRepository: The singleton instance of the in-memory store.
+    """
+    return _global_in_memory_repo
