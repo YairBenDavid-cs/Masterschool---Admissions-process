@@ -1,3 +1,5 @@
+"""Tests for the underlying FSM system, routing, and agnostic flow mechanics."""
+
 import pytest
 from typing import Dict, Any
 

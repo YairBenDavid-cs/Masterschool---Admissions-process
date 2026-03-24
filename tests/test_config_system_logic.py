@@ -1,6 +1,4 @@
-"""
-Unit tests for the configuration loader, validating FSM blueprint parsing and error handling.
-"""
+"""Tests for the underlying FSM system, routing, and agnostic flow mechanics."""
 
 import json
 import pytest
