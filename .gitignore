@@ -37,3 +37,6 @@ build/
 
 # OS artifacts
 Thumbs.db
+
+# Agent-specific files
+/.claude
