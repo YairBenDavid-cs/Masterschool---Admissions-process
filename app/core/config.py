@@ -58,5 +58,16 @@ def load_flow_config(settings: Settings) -> FlowConfig:
 
 @lru_cache()
 def get_settings() -> Settings:
-    """Singleton provider for settings."""
+    """
+    Dependency provider that returns the application settings.
+    Using @lru_cache ensures that the Settings object is instantiated only once (Singleton pattern).
+    """
     return Settings()
+
+@lru_cache()
+def get_flow_config() -> FlowConfig:
+    """
+    Dependency provider that returns the loaded FSM configuration.
+    Using @lru_cache ensures the JSON is parsed only once (Singleton pattern).
+    """
+    return load_flow_config(get_settings())
