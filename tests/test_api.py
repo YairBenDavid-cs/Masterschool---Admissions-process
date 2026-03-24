@@ -1,38 +1,63 @@
+"""
+Integration tests for the Admissions Engine REST API endpoints and HATEOAS compliance.
+"""
+
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.repository.in_memory import InMemoryUserRepository
-from app.repository.in_memory import get_repo 
+from app.repository.in_memory import get_repo
 
 client = TestClient(app)
 
-# --- Test Environment Configuration ---
+
+# =============================================================================
+# Test Environment Configuration
+# =============================================================================
 
 @pytest.fixture(autouse=True)
 def fresh_repo():
     """
-    Runs automatically before EVERY test. 
+    Runs automatically before EVERY test.
     Overrides the FastAPI dependency to inject a fresh, empty repository,
     ensuring complete data isolation (preventing test pollution).
     """
     clean_repo = InMemoryUserRepository()
     app.dependency_overrides[get_repo] = lambda: clean_repo
-    
+
     yield # Test executes here
-    
+
     app.dependency_overrides.clear()
 
 
-# --- Helpers for Dynamic Discovery & Navigation ---
+# =============================================================================
+# Helpers for Dynamic Discovery & Navigation
+# =============================================================================
 
 def get_flow_blueprint() -> dict:
-    """Retrieves the full flow configuration from the API to avoid hardcoding names."""
+    """
+    Retrieves the full flow configuration from the API to avoid hardcoding names.
+
+    Returns:
+        dict: The parsed JSON response containing 'steps' and 'tasks_map'.
+    """
     response = client.get("/api/v1/flow")
     assert response.status_code == 200, "Failed to fetch flow blueprint"
     return response.json()
 
 def find_injection_task(blueprint: dict) -> tuple[str, str]:
-    """Finds the first task and step that triggers a 'custom_flow' injection."""
+    """
+    Finds the first task and step that triggers a 'custom_flow' injection.
+
+    Args:
+        blueprint (dict): The full flow configuration as returned by the
+            GET /flow endpoint.
+
+    Returns:
+        tuple[str, str]: A (step_name, task_id) pair for the first task
+            with an inject_to_custom_flow transition, or (None, None)
+            if no such task exists.
+    """
     for step in blueprint["steps"]:
         for task_id in step["tasks"]:
             task_bp = blueprint.get("tasks_map", {}).get(task_id)
@@ -44,34 +69,61 @@ def find_injection_task(blueprint: dict) -> tuple[str, str]:
     return None, None
 
 def get_multi_task_step(blueprint: dict) -> dict:
-    """Finds the first step in the configuration that contains more than one task."""
+    """
+    Finds the first step in the configuration that contains more than one task.
+
+    Args:
+        blueprint (dict): The full flow configuration as returned by the
+            GET /flow endpoint.
+
+    Returns:
+        dict: The step dictionary containing 'name' and 'tasks', or None
+            if no multi-task step exists.
+    """
     for step in blueprint["steps"]:
         if len(step["tasks"]) > 1:
             return step
     return None
 
 def navigate_to_step(
-    user_id: str, 
-    target_step: str, 
-    current_user_data: dict, 
+    user_id: str,
+    target_step: str,
+    current_user_data: dict,
     custom_payloads: dict = None
 ) -> dict:
     """
     Helper to dynamically advance a user to a specific step.
-    Accepts an optional 'custom_payloads' dict to override standard passing payloads.
+
+    Repeatedly submits task completions using the API-provided current_step
+    and current_task until the user reaches the target step or a terminal
+    state. Accepts an optional custom_payloads dict to override standard
+    passing payloads for specific tasks.
+
+    Args:
+        user_id (str): The unique identifier of the user to advance.
+        target_step (str): The name of the step to navigate toward.
+        current_user_data (dict): The current API response containing
+            the user's state (current_step, current_task, status).
+        custom_payloads (dict): Optional mapping of task_name to payload
+            dict, used to override the default passing payload for
+            specific tasks.
+
+    Returns:
+        dict: The final API response after navigation completes, containing
+            the user's updated state.
     """
     if custom_payloads is None:
         custom_payloads = {}
-        
+
     user_data = current_user_data
     max_iterations = 20 # Circuit breaker to prevent infinite loops
-    
+
     for _ in range(max_iterations):
         if user_data["current_step"] == target_step or user_data["status"] != "IN_PROGRESS":
             break
-            
+
         current_task = user_data["current_task"]
-        
+
         # Flex: Use custom payload if provided, otherwise fallback to generic passing values
         default_payload = {"score": 100, "decision": "passed_interview"}
         task_payload = custom_payloads.get(current_task, default_payload)
@@ -82,19 +134,21 @@ def navigate_to_step(
             "task_name": current_task,
             "task_payload": task_payload
         }
-        
+
         res = client.put("/api/v1/tasks/complete", json=payload)
         assert res.status_code == 200, f"Navigation failed at task '{current_task}'. Response: {res.text}"
         user_data = res.json()
-        
+
     return user_data
 
 
-# --- 1. User Management & HATEOAS Discovery ---
+# =============================================================================
+# 1. User Management & HATEOAS Discovery
+# =============================================================================
 
 def test_create_user_and_discover_start():
     """
-    POST /users - Validates that a new user is placed in the FIRST step 
+    POST /users - Validates that a new user is placed in the FIRST step
     defined in the JSON, regardless of its name.
     """
     blueprint = get_flow_blueprint()
@@ -104,11 +158,11 @@ def test_create_user_and_discover_start():
     response = client.post("/api/v1/users", json={"email": "dynamic.candidate@test.com"})
     assert response.status_code == 201
     data = response.json()
-    
+
     assert "user_id" in data
     assert data["current_step"] == expected_first_step
     assert data["current_task"] == expected_first_task
-    
+
     # HATEOAS Links Validation
     assert "_links" in data
     assert "next_action" in data["_links"]
@@ -116,74 +170,76 @@ def test_create_user_and_discover_start():
 
 def test_hateoas_progress_in_responses():
     """
-    Validates that progress info (e.g., step index) is calculated correctly 
+    Validates that progress info (e.g., step index) is calculated correctly
     based on the blueprint and returned on state-changing actions (like POST).
     """
     response = client.post("/api/v1/users", json={"email": "progress@test.com"})
     assert response.status_code == 201
     data = response.json()
-    
+
     assert "progress" in data
     assert data["progress"]["current_step_index"] == 1
     assert data["progress"]["total_steps"] == len(get_flow_blueprint()["steps"])
-    
+
     # Validation for the new is_terminal flag
     assert "is_terminal" in data["progress"]
     assert data["progress"]["is_terminal"] is False
 
 def test_get_user_current_step_and_task():
     """
-    GET /users/{id}/current - Validates the optimized endpoint returns 
+    GET /users/{id}/current - Validates the optimized endpoint returns
     ONLY the current step and task.
     """
     user_id = client.post("/api/v1/users", json={"email": "current@test.com"}).json()["user_id"]
-    
+
     response = client.get(f"/api/v1/users/{user_id}/current")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert "current_step" in data
     assert "current_task" in data
     assert "status" not in data  # Proving it is optimized/isolated
 
 def test_get_user_overarching_status():
     """
-    GET /users/{id}/status - Validates the optimized endpoint returns 
+    GET /users/{id}/status - Validates the optimized endpoint returns
     ONLY the overarching status (ACCEPTED, REJECTED, IN_PROGRESS).
     """
     user_id = client.post("/api/v1/users", json={"email": "status@test.com"}).json()["user_id"]
-    
+
     response = client.get(f"/api/v1/users/{user_id}/status")
     assert response.status_code == 200
     data = response.json()
-    
+
     assert "status" in data
     assert "current_step" not in data  # Proving it is optimized/isolated
 
 
-# --- 2. Dynamic Logic & Step Navigation ---
+# =============================================================================
+# 2. Dynamic Logic & Step Navigation
+# =============================================================================
 
 def test_multi_task_step_persistence():
     """
-    PUT /tasks/complete - Verifies that a user remains on the same 'current_step' 
+    PUT /tasks/complete - Verifies that a user remains on the same 'current_step'
     if the step contains multiple tasks, until all tasks are completed.
     """
     blueprint = get_flow_blueprint()
     multi_task_step = get_multi_task_step(blueprint)
-    
+
     if not multi_task_step:
         pytest.skip("No multi-task step found in current flow_config.json")
-        
+
     target_step = multi_task_step["name"]
     first_task = multi_task_step["tasks"][0]
     second_task = multi_task_step["tasks"][1]
 
     initial_user = client.post("/api/v1/users", json={"email": "multitask@test.com"}).json()
     user_data = navigate_to_step(initial_user["user_id"], target_step, initial_user)
-    
+
     assert user_data["current_step"] == target_step
     assert user_data["current_task"] == first_task
-    
+
     # Submit ONLY the first task of this step
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_data["user_id"],
@@ -191,28 +247,28 @@ def test_multi_task_step_persistence():
         "task_name": first_task,
         "task_payload": {"interview_date": "2026-05-01"} # Example generic payload
     })
-    
+
     assert res.status_code == 200
     updated_data = res.json()
-    
+
     # Assert the step did NOT change, but the task DID progress
     assert updated_data["current_step"] == target_step
     assert updated_data["current_task"] == second_task
 
 def test_dynamic_task_injection_edge_case():
     """
-    PUT /tasks/complete - Verifies that any task marked with 
+    PUT /tasks/complete - Verifies that any task marked with
     'inject_to_custom_flow' in the JSON correctly updates the user state.
     """
     blueprint = get_flow_blueprint()
     step_name, task_name = find_injection_task(blueprint)
-    
+
     if not step_name:
         pytest.skip("No injection task found in current flow_config.json")
 
     initial_user = client.post("/api/v1/users", json={"email": "edge.case@test.com"}).json()
     user_data = navigate_to_step(initial_user["user_id"], step_name, initial_user)
-    
+
     # Submit the specific payload known to trigger the injection condition
     payload = {
         "user_id": user_data["user_id"],
@@ -220,48 +276,57 @@ def test_dynamic_task_injection_edge_case():
         "task_name": task_name,
         "task_payload": {"score": 65} # The defining threshold for 'Second Chance'
     }
-    
+
     response = client.put("/api/v1/tasks/complete", json=payload)
     assert response.status_code == 200
     data = response.json()
-    
+
     # Verify injection occurred successfully
     assert len(data["custom_flow"]) > 0
     assert data["current_task"] in data["custom_flow"]
 
 
-# --- 3. Terminal States & Security Guards ---
+# =============================================================================
+# 3. Terminal States & Security Guards
+# =============================================================================
 
 def test_terminal_state_lock():
     """
-    PUT /tasks/complete - Validates that once a user reaches a terminal state 
+    PUT /tasks/complete - Validates that once a user reaches a terminal state
     (ACCEPTED/REJECTED), they are locked and cannot process further tasks.
     """
     initial_user = client.post("/api/v1/users", json={"email": "terminal@test.com"}).json()
     user_id = initial_user["user_id"]
-    
+
     # Navigate to a non-existent step to force reaching the end of the flow
     user_data = navigate_to_step(user_id, "NON_EXISTENT_STEP_TO_FORCE_COMPLETION", initial_user)
-        
+
     assert user_data["status"] in ["ACCEPTED", "REJECTED"], "User did not reach terminal state"
-    
+
     # Attempt to perform an action after reaching terminal state
     payload = {
         "user_id": user_id,
-        "step_name": user_data["current_step"], 
+        "step_name": user_data["current_step"],
         "task_name": user_data["current_task"],
         "task_payload": {}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
-    
+
     # Verify the system locks them out with a 400 Bad Request
     assert response.status_code == 400
     assert "terminal state" in response.json()["detail"].lower()
 
 def test_error_task_mismatch():
-    """PUT /tasks/complete - Should return 400 if user tries to submit the wrong step/task."""
+    """
+    PUT /tasks/complete - Validates that submitting a mismatched step/task
+    pair is rejected with a 400 error.
+
+    Expected Behavior:
+        The API returns 400 Bad Request with a detail message containing
+        'mismatch', proving the anti-cheat guard clause is active.
+    """
     user_id = client.post("/api/v1/users", json={"email": "mismatch@test.com"}).json()["user_id"]
-    
+
     payload = {
         "user_id": user_id,
         "step_name": "hacked_step",
@@ -273,16 +338,25 @@ def test_error_task_mismatch():
     assert "mismatch" in response.json()["detail"].lower()
 
 def test_error_user_not_found():
-    """GET /users/{id}/status - Should return 404 for invalid IDs."""
+    """
+    GET /users/{id}/status - Validates that requesting a non-existent user
+    returns the correct error response.
+
+    Expected Behavior:
+        The API returns 404 Not Found for any invalid or non-existent
+        user UUID.
+    """
     response = client.get("/api/v1/users/non-existent-uuid/status")
     assert response.status_code == 404
 
 
-# --- 4. The Full Journey (HATEOAS Compliance) ---
+# =============================================================================
+# 4. The Full Journey (HATEOAS Compliance)
+# =============================================================================
 
 def test_complete_flow_following_api_instructions():
     """
-    End-to-End: This test simply 'follows' the current_task and current_step 
+    End-to-End: This test simply 'follows' the current_task and current_step
     provided by the API until it reaches a terminal state, proving complete decoupling.
     """
     response = client.post("/api/v1/users", json={"email": "full.journey@test.com"})
@@ -290,16 +364,16 @@ def test_complete_flow_following_api_instructions():
     user_data = response.json()
     user_id = user_data["user_id"]
 
-    max_iterations = 20 
+    max_iterations = 20
     for _ in range(max_iterations):
         if user_data["status"] in ["ACCEPTED", "REJECTED"]:
             break
-            
+
         payload = {
             "user_id": user_id,
             "step_name": user_data["current_step"],
             "task_name": user_data["current_task"],
-            "task_payload": {"score": 100, "decision": "passed_interview"} 
+            "task_payload": {"score": 100, "decision": "passed_interview"}
         }
         res = client.put("/api/v1/tasks/complete", json=payload)
         assert res.status_code == 200, f"Failed at step: {user_data['current_step']}"

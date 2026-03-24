@@ -1,3 +1,7 @@
+"""
+Unit tests for the configuration loader, validating FSM blueprint parsing and error handling.
+"""
+
 import json
 import pytest
 from pathlib import Path
@@ -6,19 +10,26 @@ from pydantic import ValidationError
 from app.core.config import load_flow_config, Settings
 from app.core.config_models import FlowConfig, PassConditionType
 
-# --- 1. Successful Loading & Decoupling ---
+
+# =============================================================================
+# 1. Successful Loading & Decoupling
+# =============================================================================
 
 def test_load_flow_config_success(tmp_path: Path):
     """
     Validates that load_flow_config correctly parses a valid JSON file.
-    
-    Decoupling Focus: We use generic names ('step_alpha', 'task_x') instead of 
-    domain-specific names ('iq_test') to prove the loader is purely structural 
+
+    Decoupling Focus: We use generic names ('step_alpha', 'task_x') instead of
+    domain-specific names ('iq_test') to prove the loader is purely structural
     and data-driven, agnostic to the actual business flow.
+
+    Expected Behavior:
+        The returned FlowConfig contains the expected step, task, enum values,
+        and inject_to_custom_flow flag, all correctly parsed from JSON.
     """
     # Arrange: Create a temporary valid config file with dynamic flag included
     config_file = tmp_path / "dynamic_flow.json"
-    
+
     dummy_data = {
         "default_steps": [
             {
@@ -36,7 +47,7 @@ def test_load_flow_config_success(tmp_path: Path):
                         "condition": "DEFAULT",
                         "next_step": "step_beta",
                         "next_task": "task_y",
-                        "inject_to_custom_flow": True  
+                        "inject_to_custom_flow": True
                     }
                 ]
             }
@@ -51,11 +62,11 @@ def test_load_flow_config_success(tmp_path: Path):
 
     # Assert
     assert isinstance(config, FlowConfig)
-    
+
     # Validate the Steps object structure
     assert len(config.default_steps) == 1
     assert config.default_steps[0].name == "step_alpha"
-    
+
     # Validate the Tasks Map structure and our specific Enum/Boolean parsers
     parsed_task = config.tasks_map["task_x"]
     assert parsed_task.pass_condition_type == PassConditionType.EVALUATE_PAYLOAD
@@ -63,12 +74,18 @@ def test_load_flow_config_success(tmp_path: Path):
     assert parsed_task.transitions[0].inject_to_custom_flow is True
 
 
-# --- 2. Negative Testing (File System Errors) ---
+# =============================================================================
+# 2. Negative Testing (File System Errors)
+# =============================================================================
 
 def test_load_flow_config_file_not_found():
     """
-    Validates that the loader raises FileNotFoundError when the 
+    Validates that the loader raises FileNotFoundError when the
     path in Settings points to a non-existent file.
+
+    Expected Behavior:
+        FileNotFoundError is raised immediately, preventing any downstream
+        parsing attempts on a missing file.
     """
     # Arrange: Settings pointing to a ghost file
     test_settings = Settings(FLOW_CONFIG_PATH="ghost_file.json")
@@ -78,19 +95,25 @@ def test_load_flow_config_file_not_found():
         load_flow_config(settings=test_settings)
 
 
-# --- 3. Negative Testing (Schema & Enum Validation Errors) ---
+# =============================================================================
+# 3. Negative Testing (Schema & Enum Validation Errors)
+# =============================================================================
 
 def test_load_flow_config_missing_field_error(tmp_path: Path):
     """
-    Validates that the loader raises a RuntimeError if the 
+    Validates that the loader raises a RuntimeError if the
     JSON file is structurally invalid (e.g., missing required fields).
-    
-    Technical Excellence: Ensures corrupted FSM configurations crash early 
+
+    Technical Excellence: Ensures corrupted FSM configurations crash early
     and explicitly, rather than causing downstream logic errors.
+
+    Expected Behavior:
+        RuntimeError is raised when the JSON is missing the required
+        'tasks_map' field, wrapping the underlying Pydantic validation error.
     """
     # Arrange: Create a malformed config file (missing 'tasks_map')
     config_file = tmp_path / "broken_flow.json"
-    
+
     corrupted_data = {
         "default_steps": [
             {
@@ -113,10 +136,14 @@ def test_load_flow_config_invalid_enum_error(tmp_path: Path):
     """
     Validates that Pydantic strictly enforces Enum values.
     If the JSON contains an invalid pass_condition_type, it must fail early.
+
+    Expected Behavior:
+        RuntimeError is raised with the underlying cause referencing the
+        invalid enum value 'MAGIC_PASS'.
     """
     # Arrange: Valid structure, but invalid Enum value
     config_file = tmp_path / "invalid_enum_flow.json"
-    
+
     invalid_enum_data = {
         "default_steps": [
             {
@@ -146,6 +173,6 @@ def test_load_flow_config_invalid_enum_error(tmp_path: Path):
     # Act & Assert
     with pytest.raises(RuntimeError) as exc_info:
         load_flow_config(settings=test_settings)
-        
+
     # Assert that the error is specifically about the bad Enum value
     assert "MAGIC_PASS" in str(exc_info.value.__cause__)
