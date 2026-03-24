@@ -44,6 +44,7 @@ router = APIRouter(prefix="/api/v1", tags=["Admissions Flow"])
 
 @router.post(
     "/users",
+    summary="Register a New Candidate",
     response_model=UserStatusResponse,
     status_code=status.HTTP_201_CREATED
 )
@@ -85,6 +86,7 @@ def register_user(
 
 @router.get(
     "/flow",
+    summary="Retrieve the Full FSM Flow Blueprint",
     response_model=FlowDefinitionResponse,
     status_code=status.HTTP_200_OK
 )
@@ -115,6 +117,7 @@ def get_flow(flow: FlowConfig = Depends(get_flow_config)) -> FlowDefinitionRespo
 
 @router.get(
     "/users/{user_id}/current",
+    summary="Get Candidate's Current Step & Task",
     response_model=Dict[str, str],
     status_code=status.HTTP_200_OK
 )
@@ -156,6 +159,7 @@ def get_user_current_step_and_task(
 
 @router.put(
     "/tasks/complete",
+    summary="Complete a Task & Advance the FSM",
     response_model=UserStatusResponse,
     status_code=status.HTTP_200_OK
 )
@@ -211,6 +215,7 @@ def complete_task(
 
 @router.get(
     "/users/{user_id}/status",
+    summary="Get Candidate's Admission Status",
     response_model=Dict[str, str],
     status_code=status.HTTP_200_OK
 )

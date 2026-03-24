@@ -54,7 +54,34 @@ async def lifespan(app: FastAPI):
 # =============================================================================
 app = FastAPI(
     title="Masterschool Admissions Engine",
-    description="A Data-Driven Finite State Machine API for candidate enrollment.",
+    description="""
+A **Data-Driven Finite State Machine** API for the Masterschool candidate enrollment process.
+
+All flow logic lives in `flow_config.json`. The Python engine is 100% domain-agnostic and fully PM-configurable without code changes.
+
+---
+
+## Quick Start Guide
+
+Follow these steps in order to run a complete admissions flow directly from this UI:
+
+### Step 1 — Register a Candidate
+**`POST /api/v1/users`** — Click **Try it out**, then **Execute**.
+The email is pre-filled and ready to go.
+Copy the `user_id` from the response body.
+
+### Step 2 — Advance Through the Flow
+**`PUT /api/v1/tasks/complete`** — Click **Try it out**, paste your `user_id` into the request body, and click **Execute**.
+The `step_name` and `task_name` are pre-filled with the first step of the flow.
+Each response returns the **next** `current_step` and `current_task` — update the body and repeat until `status` is `ACCEPTED` or `REJECTED`.
+
+### Step 3 — Poll the Outcome at Any Time
+**`GET /api/v1/users/{user_id}/status`** — Paste your `user_id` to check the candidate's final admission decision.
+
+---
+
+**Full Flow:** `Personal Details → IQ Test → Interview → Sign Contract → Payment → Join Slack → ACCEPTED`
+""",
     version="1.0.0",
     docs_url="/docs",   # Swagger UI
     redoc_url="/redoc", # ReDoc UI
@@ -90,7 +117,7 @@ async def engine_evaluation_error_handler(request: Request, exc: EngineEvaluatio
 # =============================================================================
 # HEALTH PROBES
 # =============================================================================
-@app.get("/health", tags=["System"])
+@app.get("/health", summary="API Health Check", tags=["System"])
 def health_check() -> dict[str, str]:
     """
     Liveness probe endpoint.

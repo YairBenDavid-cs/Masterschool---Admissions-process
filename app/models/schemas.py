@@ -16,8 +16,16 @@ class UserCreateRequest(BaseModel):
     """
     Payload required to create a new user and initiate their admissions flow.
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "email": "candidate@masterschool.com"
+            }
+        }
+    )
+
     email: EmailStr = Field(
-        ..., 
+        ...,
         description="Valid email address of the applicant. Strongly validated to prevent garbage data."
     )
 
@@ -25,17 +33,32 @@ class UserCreateRequest(BaseModel):
 class TaskCompleteRequest(BaseModel):
     """
     The incoming webhook/API payload to mark a specific task as completed.
-    
-    The `task_payload` is a generic dictionary, allowing extreme flexibility 
-    for the Product Managers to send any dynamic data structure 
+
+    The `task_payload` is a generic dictionary, allowing extreme flexibility
+    for the Product Managers to send any dynamic data structure
     (e.g., {"score": 75} or {"decision": "passed_interview"}).
     """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "user_id": "paste-your-user-id-from-step-1-here",
+                "step_name": "personal_details",
+                "task_name": "submit_personal_details",
+                "task_payload": {}
+            }
+        }
+    )
+
     user_id: str = Field(..., description="The unique identifier of the user.")
     step_name: str = Field(..., description="The step the task belongs to (for validation).")
     task_name: str = Field(..., description="The specific task being completed.")
     task_payload: Dict[str, Any] = Field(
-        default_factory=dict, 
-        description="Dynamic data containing the test results or form inputs to be evaluated by the FSM."
+        default_factory=dict,
+        description=(
+            "Dynamic FSM evaluation data. Leave empty `{}` for AUTO_PASS tasks (e.g., Step 1: Personal Details). "
+            "For evaluated tasks, send the relevant result — e.g., `{\"score\": 82}` for the IQ Test "
+            "or `{\"decision\": \"passed_interview\"}` for the Interview."
+        )
     )
 
 
