@@ -1,6 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-
 from app.main import app
 from app.repository.in_memory import InMemoryUserRepository
 from app.repository.in_memory import get_repo 
