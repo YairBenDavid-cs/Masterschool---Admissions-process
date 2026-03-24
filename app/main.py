@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -20,27 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# FASTAPI APPLICATION INSTANCE
+# LIFECYCLE EVENTS (Replaces @app.on_event)
 # =============================================================================
-app = FastAPI(
-    title="Masterschool Admissions Engine",
-    description="A Data-Driven Finite State Machine API for candidate enrollment.",
-    version="1.0.0",
-    docs_url="/docs",   # Swagger UI
-    redoc_url="/redoc"  # ReDoc UI
-)
-
-# Mount the API routes defined in app/api/routes.py
-app.include_router(api_router)
-
-
-# =============================================================================
-# LIFECYCLE EVENTS
-# =============================================================================
-@app.on_event("startup")
-async def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    Executes on application startup.
+    Executes on application startup and shutdown.
     
     Validates that the immutable FSM flow configuration can be loaded successfully.
     Adheres to the "Fail-Fast" principle: if the configuration is missing or 
@@ -56,6 +42,27 @@ async def startup_event() -> None:
         logger.critical(f"FATAL: Failed to load FSM configuration on startup: {exc}")
         # Stop the server from starting if the core brain is broken
         raise RuntimeError("Application cannot start without a valid flow configuration.") from exc
+        
+    yield  # The FastAPI application runs here
+    
+    # Teardown/Shutdown logic would go here if needed (e.g., closing DB connections)
+    logger.info("Shutting down Admissions Engine...")
+
+
+# =============================================================================
+# FASTAPI APPLICATION INSTANCE
+# =============================================================================
+app = FastAPI(
+    title="Masterschool Admissions Engine",
+    description="A Data-Driven Finite State Machine API for candidate enrollment.",
+    version="1.0.0",
+    docs_url="/docs",   # Swagger UI
+    redoc_url="/redoc", # ReDoc UI
+    lifespan=lifespan   # Attaching the new lifespan context manager
+)
+
+# Mount the API routes defined in app/api/routes.py
+app.include_router(api_router)
 
 
 # =============================================================================
