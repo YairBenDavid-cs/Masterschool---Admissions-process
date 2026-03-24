@@ -11,6 +11,7 @@ from app.models.domain import User
 from app.repository.base import UserRepository
 from app.core.config_models import FlowConfig, Status, StepBlueprint, TransitionRule
 from app.core.engine import evaluate_transition, EngineEvaluationError
+from app.core.validator import validate_task_payload, PayloadValidationError  # re-exported below
 from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +40,16 @@ class TaskMismatchError(Exception):
 class ConfigurationError(Exception):
     """Raised when there is an inconsistency in the FSM configuration metadata."""
     pass
+
+# Re-exported so callers only need to import from app.services.admissions
+__all__ = [
+    "PayloadValidationError",
+    "UserNotFoundError",
+    "EmailAlreadyExistsError",
+    "WorkflowStateError",
+    "TaskMismatchError",
+    "ConfigurationError",
+]
 
 
 # =============================================================================
@@ -154,6 +165,10 @@ def process_task_completion(
     task_blueprint = flow.tasks_map.get(current_task)
     if not task_blueprint:
         raise ConfigurationError(f"Task blueprint '{current_task}' not found in configuration.")
+
+    # Validate payload against the task's declared schema contract
+    # PayloadValidationError propagates to the route layer → HTTP 422
+    validate_task_payload(payload, task_blueprint)
 
     # 1. Evaluate Decision (The Engine)
     try:

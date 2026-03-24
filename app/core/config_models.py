@@ -3,7 +3,7 @@ Pydantic models and enumerations defining the FSM configuration schema.
 """
 
 from enum import Enum
-from typing import List, Dict, Optional
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
@@ -30,6 +30,23 @@ class Status(str, Enum):
 # =============================================================================
 # MODELS
 # =============================================================================
+
+class FieldDefinition(BaseModel):
+    """
+    Defines a single expected field in a task's payload contract.
+
+    Stored in the JSON config; drives both validation and API schema discovery.
+    Adding or removing a field here automatically updates enforcement and
+    the self-describing API response — with zero changes to Python source.
+    """
+    name: str = Field(..., description="Payload key name (e.g., 'score')")
+    type: str = Field(
+        ...,
+        description="Expected Python type as a string: 'int', 'str', 'float', or 'bool'"
+    )
+    required: bool = Field(default=True, description="Whether the field is mandatory")
+    description: str = Field(default="", description="Human-readable hint for the frontend")
+
 
 class TransitionRule(BaseModel):
     """
@@ -64,6 +81,10 @@ class TaskBlueprint(BaseModel):
     name: str = Field(..., description="Task unique identifier")
     pass_condition_type: PassConditionType = Field(..., description="Evaluation strategy for the task")
     transitions: List[TransitionRule] = Field(..., description="Possible transitions from this task")
+    payload_schema: List[FieldDefinition] = Field(
+        default_factory=list,
+        description="Contract defining required fields and their types for this task's payload."
+    )
 
 class StepBlueprint(BaseModel):
     """

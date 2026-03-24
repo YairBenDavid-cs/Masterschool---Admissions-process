@@ -7,7 +7,7 @@ from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 # Importing Enums and Blueprints for strict typing and Swagger documentation
-from app.core.config_models import Status, StepBlueprint, TaskBlueprint
+from app.core.config_models import Status, StepBlueprint, TaskBlueprint, FieldDefinition
 
 # =============================================================================
 # REQUEST DTOs (Data Transfer Objects)
@@ -134,9 +134,18 @@ class UserStatusResponse(BaseModel):
     )
     
     links: Dict[str, HateoasLink] = Field(
-        default_factory=dict, 
+        default_factory=dict,
         alias="_links", # Adheres to HAL/HATEOAS JSON standards by prefixing with underscore
         description="HATEOAS links detailing the next permitted actions for this user."
+    )
+    current_task_schema: List[FieldDefinition] = Field(
+        default_factory=list,
+        description=(
+            "The payload contract for the user's current task. "
+            "Defines the exact fields, types, and descriptions required to submit "
+            "the next PUT /tasks/complete request. Empty list for terminal users "
+            "or tasks that require no payload (AUTO_PASS)."
+        )
     )
 
 

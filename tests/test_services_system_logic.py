@@ -5,7 +5,8 @@ from typing import Any, Dict
 
 from app.models.domain import User
 from app.repository.in_memory import InMemoryUserRepository
-from app.core.config_models import FlowConfig, StepBlueprint, TaskBlueprint, TransitionRule, Status, PassConditionType
+from app.core.config_models import FlowConfig, StepBlueprint, TaskBlueprint, TransitionRule, Status, PassConditionType, FieldDefinition
+from app.core.validator import validate_task_payload, PayloadValidationError
 from app.services.admissions import (
     create_new_user,
     process_task_completion,
@@ -569,3 +570,94 @@ def test_last_completed_task_set_after_task_completion(
     )
 
     assert updated_user.last_completed_task == "task_auto_pass"
+
+
+# =============================================================================
+# 7. Payload Validator Unit Tests
+# =============================================================================
+
+def _make_task_with_schema(fields: list[FieldDefinition]) -> TaskBlueprint:
+    """Helper: creates a minimal TaskBlueprint with the given payload_schema."""
+    return TaskBlueprint(
+        name="test_task",
+        pass_condition_type=PassConditionType.EVALUATE_PAYLOAD,
+        transitions=[TransitionRule(condition="DEFAULT", next_step="s", next_task="t")],
+        payload_schema=fields
+    )
+
+
+def test_validate_empty_schema_is_noop() -> None:
+    """
+    [Layer A] validate_task_payload — no-op when payload_schema is empty.
+
+    Expected Behavior:
+        An empty payload against a schema-free blueprint must not raise.
+        Backward compatible with all tasks that don't define a schema.
+    """
+    task = _make_task_with_schema([])
+    validate_task_payload({}, task)  # Must not raise
+
+
+def test_validate_missing_required_field_raises() -> None:
+    """
+    [Layer A] validate_task_payload — raises when a required field is absent.
+
+    Expected Behavior:
+        PayloadValidationError raised, message references the missing field name.
+    """
+    field = FieldDefinition(name="score", type="int", required=True)
+    task = _make_task_with_schema([field])
+    with pytest.raises(PayloadValidationError, match="score"):
+        validate_task_payload({}, task)
+
+
+def test_validate_wrong_type_raises() -> None:
+    """
+    [Layer A] validate_task_payload — raises when field value has wrong type.
+
+    Expected Behavior:
+        Submitting 'score' as a string when 'int' is expected raises
+        PayloadValidationError with the expected type in the message.
+    """
+    field = FieldDefinition(name="score", type="int", required=True)
+    task = _make_task_with_schema([field])
+    with pytest.raises(PayloadValidationError, match="int"):
+        validate_task_payload({"score": "not_an_int"}, task)
+
+
+def test_validate_optional_field_absent_is_ok() -> None:
+    """
+    [Layer A] validate_task_payload — optional absent field does not raise.
+
+    Expected Behavior:
+        When required=False and the field is missing, no exception is raised.
+    """
+    field = FieldDefinition(name="notes", type="str", required=False)
+    task = _make_task_with_schema([field])
+    validate_task_payload({}, task)  # Must not raise
+
+
+def test_validate_optional_field_wrong_type_raises() -> None:
+    """
+    [Layer A] validate_task_payload — optional field still type-checked if present.
+
+    Expected Behavior:
+        When required=False but the field IS present with the wrong type,
+        PayloadValidationError is raised.
+    """
+    field = FieldDefinition(name="notes", type="str", required=False)
+    task = _make_task_with_schema([field])
+    with pytest.raises(PayloadValidationError, match="str"):
+        validate_task_payload({"notes": 123}, task)
+
+
+def test_validate_correct_payload_passes() -> None:
+    """
+    [Layer A] validate_task_payload — valid payload clears all checks without raising.
+
+    Expected Behavior:
+        Correct field name and matching type result in a clean no-op return.
+    """
+    field = FieldDefinition(name="score", type="int", required=True)
+    task = _make_task_with_schema([field])
+    validate_task_payload({"score": 85}, task)  # Must not raise
