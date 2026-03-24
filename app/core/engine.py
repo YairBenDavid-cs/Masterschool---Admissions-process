@@ -1,3 +1,7 @@
+"""
+FSM evaluation engine that processes transition rules against submitted payloads.
+"""
+
 from typing import Any, Dict, Optional
 from app.core.config_models import TaskBlueprint, TransitionRule, PassConditionType
 from app.core.logging_config import get_logger

@@ -1,6 +1,15 @@
+"""
+Pydantic models and enumerations defining the FSM configuration schema.
+"""
+
 from enum import Enum
 from typing import List, Dict, Optional
 from pydantic import BaseModel, Field
+
+
+# =============================================================================
+# ENUMERATIONS
+# =============================================================================
 
 class PassConditionType(str, Enum):
     """
@@ -16,6 +25,11 @@ class Status(str, Enum):
     IN_PROGRESS = "IN_PROGRESS"
     ACCEPTED = "ACCEPTED"
     REJECTED = "REJECTED"
+
+
+# =============================================================================
+# MODELS
+# =============================================================================
 
 class TransitionRule(BaseModel):
     """

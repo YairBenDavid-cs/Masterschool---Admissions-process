@@ -1,12 +1,22 @@
+"""
+Centralized logging configuration and logger factory for the application.
+"""
+
+# Standard Library
 import logging
 import sys
+
+
+# =============================================================================
+# SETUP
+# =============================================================================
 
 def setup_logging() -> None:
     """
     Configures the global logging settings for the application.
-    
-    Sets the log level to INFO and defines a standard format that includes 
-    timestamps, logger names, and severity levels. All logs are directed 
+
+    Sets the log level to INFO and defines a standard format that includes
+    timestamps, logger names, and severity levels. All logs are directed
     to sys.stdout for container compatibility.
     """
     logging.basicConfig(
@@ -16,6 +26,11 @@ def setup_logging() -> None:
             logging.StreamHandler(sys.stdout)
         ]
     )
+
+
+# =============================================================================
+# FACTORY
+# =============================================================================
 
 def get_logger(name: str) -> logging.Logger:
     """
