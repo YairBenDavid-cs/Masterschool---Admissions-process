@@ -102,8 +102,8 @@ def navigate_to_step(
 
         payload = {
             "user_id": user_id,
-            "step_name": user_data["current_step"],
-            "task_name": current_task,
+            "current_step": user_data["current_step"],
+            "current_task": current_task,
             "task_payload": task_payload
         }
 
@@ -155,8 +155,8 @@ def navigate_to_task(
 
         payload = {
             "user_id": user_id,
-            "step_name": user_data["current_step"],
-            "task_name": current_task,
+            "current_step": user_data["current_step"],
+            "current_task": current_task,
             "task_payload": task_payload
         }
 

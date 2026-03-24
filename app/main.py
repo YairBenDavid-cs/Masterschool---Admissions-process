@@ -72,7 +72,7 @@ Copy the `user_id` from the response body.
 
 ### Step 2 — Advance Through the Flow
 **`PUT /api/v1/tasks/complete`** — Click **Try it out**, paste your `user_id` into the request body, and click **Execute**.
-The `step_name` and `task_name` are pre-filled with the first step of the flow.
+The `current_step` and `current_task` are pre-filled with the first step of the flow.
 Each response returns the **next** `current_step` and `current_task` — update the body and repeat until `status` is `ACCEPTED` or `REJECTED`.
 
 ### Step 3 — Poll the Outcome at Any Time

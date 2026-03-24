@@ -52,8 +52,10 @@ def test_hateoas_progress_in_responses():
     assert response.status_code == 201
     data = response.json()
     assert "progress" in data
-    assert data["progress"]["current_step_index"] == 1
-    assert data["progress"]["total_steps"] == len(get_flow_blueprint()["steps"])
+    assert data["progress"]["current_step_index"] == 0
+    total = len(get_flow_blueprint()["steps"])
+    assert data["progress"]["total_steps"] == total
+    assert data["progress"]["completion_ratio"] == f"0/{total}"
     assert "is_terminal" in data["progress"]
     assert data["progress"]["is_terminal"] is False
 
@@ -133,8 +135,8 @@ def test_multi_task_step_persistence():
 
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_data["user_id"],
-        "step_name": target_step,
-        "task_name": first_task,
+        "current_step": target_step,
+        "current_task": first_task,
         "task_payload": {"interview_date": "2026-05-01"}
     })
 
@@ -167,8 +169,8 @@ def test_dynamic_task_injection_edge_case():
     # Act
     payload = {
         "user_id": user_data["user_id"],
-        "step_name": step_name,
-        "task_name": task_name,
+        "current_step": step_name,
+        "current_task": task_name,
         "task_payload": {"score": 65}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
@@ -202,8 +204,8 @@ def test_terminal_state_lock():
     # Act
     payload = {
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": user_data["current_task"],
+        "current_step": user_data["current_step"],
+        "current_task": user_data["current_task"],
         "task_payload": {}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
@@ -227,8 +229,8 @@ def test_error_task_mismatch():
     # Act
     payload = {
         "user_id": user_id,
-        "step_name": "hacked_step",
-        "task_name": "hacked_task",
+        "current_step": "hacked_step",
+        "current_task": "hacked_task",
         "task_payload": {}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
@@ -283,8 +285,8 @@ def test_complete_flow_following_api_instructions():
 
         payload = {
             "user_id": user_id,
-            "step_name": user_data["current_step"],
-            "task_name": user_data["current_task"],
+            "current_step": user_data["current_step"],
+            "current_task": user_data["current_task"],
             "task_payload": {"score": 100, "decision": "passed_interview"}
         }
         res = client.put("/api/v1/tasks/complete", json=payload)
@@ -338,6 +340,8 @@ def test_hateoas_is_terminal_flag_true_on_completion():
     # Assert
     assert user_data["progress"]["is_terminal"] is True
     assert user_data["status"] in ["ACCEPTED", "REJECTED"]
+    total = user_data["progress"]["total_steps"]
+    assert user_data["progress"]["completion_ratio"] == f"{total}/{total}"
 
 def test_health_check_endpoint():
     """

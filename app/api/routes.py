@@ -177,7 +177,7 @@ def complete_task(
 
     Args:
         request (TaskCompleteRequest): The incoming payload containing
-            user_id, step_name, task_name, and task_payload.
+            user_id, current_step, current_task, and task_payload.
         repo (UserRepository): The injected persistence layer dependency.
         flow (FlowConfig): The injected FSM configuration dependency.
 
@@ -192,8 +192,8 @@ def complete_task(
     try:
         user = process_task_completion(
             user_id=request.user_id,
-            step_name=request.step_name,
-            task_name=request.task_name,
+            current_step=request.current_step,
+            current_task=request.current_task,
             payload=request.task_payload,
             repo=repo,
             flow=flow
@@ -258,7 +258,7 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
     Enriches the domain User entity with HATEOAS-style links and progress tracking.
 
     Calculates the user's position within the flow, derives a completion
-    percentage, and constructs navigational HATEOAS links that guide the
+    ratio, and constructs navigational HATEOAS links that guide the
     client on what actions are available next.
 
     Args:
@@ -277,24 +277,24 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
     is_terminal = user.status in [Status.ACCEPTED, Status.REJECTED]
 
     try:
-        current_idx = step_names.index(user.current_step) + 1
-        percentage = round((current_idx / total_steps) * 100, 2) if total_steps > 0 else 0.0
+        current_idx = step_names.index(user.current_step) 
+        completion_ratio = f"{current_idx}/{total_steps}" if total_steps > 0 else "0/0"
     except ValueError:
         # If step is not in default steps (e.g., TERMINAL_REJECTED)
         if user.status == Status.ACCEPTED:
             current_idx = total_steps
-            percentage = 100.0
+            completion_ratio = f"{total_steps}/{total_steps}"
         else:
             # If rejected or unknown, don't pretend it's 100%.
             # We keep current_idx at 0 or a previous known state if we tracked it (simplified here).
             current_idx = 0
-            percentage = 0.0
+            completion_ratio = f"0/{total_steps}"
 
     progress_info = ProgressInfo(
         current_step_index=current_idx,
         total_steps=total_steps,
-        percentage=percentage,
-        is_terminal=is_terminal # New field to help frontend
+        completion_ratio=completion_ratio,
+        is_terminal=is_terminal,
     )
 
     # 2. HATEOAS Links Fix (ADDED DESCRIPTION HERE)

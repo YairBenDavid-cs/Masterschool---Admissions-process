@@ -42,16 +42,16 @@ class TaskCompleteRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "user_id": "paste-your-user-id-from-step-1-here",
-                "step_name": "personal_details",
-                "task_name": "submit_personal_details",
+                "current_step": "personal_details",
+                "current_task": "submit_personal_details",
                 "task_payload": {}
             }
         }
     )
 
     user_id: str = Field(..., description="The unique identifier of the user.")
-    step_name: str = Field(..., description="The step the task belongs to (for validation).")
-    task_name: str = Field(..., description="The specific task being completed.")
+    current_step: str = Field(..., description="The step the task belongs to — must match the user's current step.")
+    current_task: str = Field(..., description="The specific task being completed — must match the user's current task.")
     task_payload: Dict[str, Any] = Field(
         default_factory=dict,
         description=(
@@ -80,13 +80,17 @@ class ProgressInfo(BaseModel):
         ..., 
         description="The total number of standard steps in the flow definition."
     )
-    percentage: float = Field(
-        ..., 
-        description="Calculated progress percentage (e.g., 50.0). Safe for UI width binding."
+    completion_ratio: str = Field(
+        ...,
+        description=(
+            "Step completion ratio as a human-readable fraction (e.g., '1/6'). "
+            "Suitable for direct display in UI labels."
+        ),
+        examples=["1/6", "3/6", "6/6"],
     )
     is_terminal: bool = Field(
-        ..., 
-        description="True if the user has reached ACCEPTED or REJECTED. Overrides percentage visuals."
+        ...,
+        description="True if the user has reached ACCEPTED or REJECTED. Overrides completion_ratio visuals."
     )
 
 

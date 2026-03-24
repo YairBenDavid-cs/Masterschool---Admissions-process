@@ -23,8 +23,8 @@ def test_iq_test_high_score_advances_to_interview():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_iq_test",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_iq_test",
         "task_payload": {"score": 100}
     })
 
@@ -53,8 +53,8 @@ def test_iq_test_medium_score_injects_second_chance():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_iq_test",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_iq_test",
         "task_payload": {"score": 65}
     })
 
@@ -83,8 +83,8 @@ def test_iq_test_low_score_causes_rejection():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_iq_test",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_iq_test",
         "task_payload": {"score": 30}
     })
 
@@ -112,8 +112,8 @@ def test_second_chance_iq_high_score_advances_to_interview():
     # Act — Trigger second chance injection
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_iq_test",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_iq_test",
         "task_payload": {"score": 65}
     })
     assert response.status_code == 200
@@ -123,8 +123,8 @@ def test_second_chance_iq_high_score_advances_to_interview():
     # Act — Pass the second chance
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "second_chance_iq",
+        "current_step": user_data["current_step"],
+        "current_task": "second_chance_iq",
         "task_payload": {"score": 100}
     })
 
@@ -151,8 +151,8 @@ def test_second_chance_iq_fail_causes_rejection():
     # Act — Trigger second chance injection
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_iq_test",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_iq_test",
         "task_payload": {"score": 65}
     })
     assert response.status_code == 200
@@ -162,8 +162,8 @@ def test_second_chance_iq_fail_causes_rejection():
     # Act — Fail the second chance
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "second_chance_iq",
+        "current_step": user_data["current_step"],
+        "current_task": "second_chance_iq",
         "task_payload": {"score": 30}
     })
 
@@ -190,8 +190,8 @@ def test_interview_pass_decision_advances_to_sign_contract():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_interview",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_interview",
         "task_payload": {"decision": "passed_interview"}
     })
 
@@ -219,8 +219,8 @@ def test_interview_fail_decision_causes_rejection():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": "perform_interview",
+        "current_step": user_data["current_step"],
+        "current_task": "perform_interview",
         "task_payload": {"decision": "failed"}
     })
 

@@ -107,8 +107,8 @@ def get_user_record(user_id: str, repo: UserRepository) -> User:
 
 def process_task_completion(
     user_id: str,
-    step_name: str,
-    task_name: str,
+    current_step: str,
+    current_task: str,
     payload: Dict[str, Any],
     repo: UserRepository,
     flow: FlowConfig
@@ -122,8 +122,8 @@ def process_task_completion(
 
     Args:
         user_id (str): The user's ID.
-        step_name (str): The step being submitted.
-        task_name (str): The task being submitted.
+        current_step (str): The step being submitted.
+        current_task (str): The task being submitted.
         payload (Dict[str, Any]): The data associated with the completion.
         repo (UserRepository): Persistence layer.
         flow (FlowConfig): FSM blueprint.
@@ -144,16 +144,16 @@ def process_task_completion(
         raise WorkflowStateError(f"User {user_id} is already in a terminal state: {user.status}")
 
     # Guard Clause: Anti-cheat / State synchronization
-    if user.current_step != step_name or user.current_task != task_name:
+    if user.current_step != current_step or user.current_task != current_task:
         raise TaskMismatchError(
             f"State mismatch. User is on {user.current_step}/{user.current_task}, "
-            f"but submitted {step_name}/{task_name}."
+            f"but submitted {current_step}/{current_task}."
         )
 
     # Retrieve blueprint for the current task
-    task_blueprint = flow.tasks_map.get(task_name)
+    task_blueprint = flow.tasks_map.get(current_task)
     if not task_blueprint:
-        raise ConfigurationError(f"Task blueprint '{task_name}' not found in configuration.")
+        raise ConfigurationError(f"Task blueprint '{current_task}' not found in configuration.")
 
     # 1. Evaluate Decision (The Engine)
     try:
