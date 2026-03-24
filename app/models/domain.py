@@ -1,14 +1,28 @@
-from typing import List, Optional
-from pydantic import BaseModel, Field
-from app.core.config_models import Status
+"""
+Domain model representing the applicant entity within the admissions FSM.
+"""
+
+# Standard Library
 from datetime import datetime, timezone
+from typing import List, Optional
+
+# Third-Party
+from pydantic import BaseModel, Field
+
+# Local Application
+from app.core.config_models import Status
+
+
+# =============================================================================
+# DOMAIN MODEL
+# =============================================================================
 
 class User(BaseModel):
     """
     Represents an applicant/user in the admissions state machine.
 
     This model holds the current state of the user. It tracks where they are
-    in the flow and maintains a record of any dynamically added tasks 
+    in the flow and maintains a record of any dynamically added tasks
     (like a second-chance IQ test) specifically tailored to them.
 
     Attributes:
@@ -26,17 +40,17 @@ class User(BaseModel):
     # Fields provided during the 'Personal Details' step
     first_name: Optional[str] = Field(None, description="Applicant's first name")
     last_name: Optional[str] = Field(None, description="Applicant's last name")
-    
+
     # Audit trail
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc),description="Timestamp of registration")
-    
+
     # State tracking
     current_step: Optional[str] = Field(default=None, description="Current step ID")
     current_task: Optional[str] = Field(default=None, description="Current task ID")
-    
-    # The dynamic flows 
+
+    # The dynamic flows
     custom_flow: List[str] = Field(
-        default_factory=list, 
+        default_factory=list,
         description="Dynamically added tasks specific to this user (e.g., second_chance_iq)"
     )
 

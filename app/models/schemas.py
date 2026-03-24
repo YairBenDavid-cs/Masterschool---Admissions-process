@@ -1,3 +1,7 @@
+"""
+Request and response DTOs (Data Transfer Objects) for the Admissions Engine API.
+"""
+
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
