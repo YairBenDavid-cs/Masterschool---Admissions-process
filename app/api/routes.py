@@ -5,7 +5,7 @@ from typing import Dict, Any
 from app.models.domain import User
 from app.core.config_models import FlowConfig, Status
 
-# Schemas (Ensure these exist in your app/models/schemas.py)
+# Schemas for request validation and response modeling
 from app.models.schemas import (
     UserCreateRequest, 
     UserStatusResponse, 
@@ -178,9 +178,13 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
         is_terminal=is_terminal # New field to help frontend
     )
 
-    # 2. HATEOAS Links Fix
+    # 2. HATEOAS Links Fix (ADDED DESCRIPTION HERE)
     links = {
-        "self": {"href": f"/api/v1/users/{user.id}/status", "method": "GET"}
+        "self": {
+            "href": f"/api/v1/users/{user.id}/status", 
+            "method": "GET",
+            "description": "View overarching candidate status"
+        }
     }
     
     if user.status == Status.IN_PROGRESS:
