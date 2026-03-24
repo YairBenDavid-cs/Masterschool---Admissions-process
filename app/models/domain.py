@@ -54,6 +54,12 @@ class User(BaseModel):
         description="Dynamically added tasks specific to this user (e.g., second_chance_iq)"
     )
 
+    # Terminal state tracking
+    last_completed_task: Optional[str] = Field(
+        default=None,
+        description="The last task completed before transitioning to terminal or current state."
+    )
+
     def is_terminated(self) -> bool:
         """
         Checks if the user's workflow has reached a terminal state.

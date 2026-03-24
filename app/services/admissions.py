@@ -162,7 +162,8 @@ def process_task_completion(
         logger.error(f"Engine failed to evaluate transition: {exc}")
         raise ConfigurationError("Decision engine failure.") from exc
 
-    # 2. Apply State Change
+    # 2. Apply State Change (capture last task before overwriting)
+    user.last_completed_task = current_task
     user.current_step = transition.next_step
     user.current_task = transition.next_task
 
@@ -174,6 +175,73 @@ def process_task_completion(
     _update_custom_flow(user, transition)
 
     return repo.save_user(user)
+
+
+def _find_injection_trigger(injected_task_id: str, flow: FlowConfig) -> str | None:
+    """
+    Finds which task's transition injects the given task_id via inject_to_custom_flow.
+
+    Args:
+        injected_task_id (str): The ID of the dynamically injected task to locate.
+        flow (FlowConfig): The FSM configuration to scan.
+
+    Returns:
+        str | None: The ID of the task that triggers injection, or None if not found.
+    """
+    for task_id, blueprint in flow.tasks_map.items():
+        for rule in blueprint.transitions:
+            if rule.inject_to_custom_flow and rule.next_task == injected_task_id:
+                return task_id
+    return None
+
+
+def build_personalized_task_sequence(user: User, flow: FlowConfig) -> list[str]:
+    """
+    Builds the user's personalized ordered task list by merging the default flow
+    with any dynamically injected tasks, inserted after their trigger task.
+
+    Args:
+        user (User): The user entity containing custom_flow.
+        flow (FlowConfig): The FSM configuration defining default steps and tasks.
+
+    Returns:
+        list[str]: Ordered list of task IDs representing this user's unique path.
+    """
+    # Phase 1: Flatten default steps into ordered task list
+    sequence: list[str] = []
+    for step in flow.default_steps:
+        sequence.extend(step.tasks)
+
+    # Phase 2: Insert each custom_flow task after its trigger task
+    for custom_task_id in user.custom_flow:
+        trigger_id = _find_injection_trigger(custom_task_id, flow)
+        if trigger_id and trigger_id in sequence:
+            insert_pos = sequence.index(trigger_id) + 1
+            sequence.insert(insert_pos, custom_task_id)
+        else:
+            sequence.append(custom_task_id)  # fallback: append at end
+
+    return sequence
+
+
+def get_user_flow(user_id: str, repo: UserRepository, flow: FlowConfig) -> tuple[User, list[str]]:
+    """
+    Retrieves a user and their personalized ordered task sequence.
+
+    Args:
+        user_id (str): The unique ID of the user.
+        repo (UserRepository): The persistence layer interface.
+        flow (FlowConfig): The FSM configuration.
+
+    Returns:
+        tuple[User, list[str]]: The user entity and their ordered task sequence.
+
+    Raises:
+        UserNotFoundError: If the user does not exist.
+    """
+    user = get_user_record(user_id, repo)
+    sequence = build_personalized_task_sequence(user, flow)
+    return user, sequence
 
 
 def _update_custom_flow(user: User, transition: TransitionRule) -> None:

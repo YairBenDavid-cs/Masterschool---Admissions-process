@@ -2,6 +2,7 @@
 Request and response DTOs (Data Transfer Objects) for the Admissions Engine API.
 """
 
+from enum import Enum
 from typing import Dict, Any, List, Optional
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
@@ -69,24 +70,24 @@ class TaskCompleteRequest(BaseModel):
 class ProgressInfo(BaseModel):
     """
     Encapsulates the user's progress statistics.
-    Allows the frontend to render progress bars blindly, without knowing 
+    Allows the frontend to render progress bars blindly, without knowing
     the underlying FSM logic or the number of steps.
     """
     current_step_index: int = Field(
-        ..., 
-        description="The 1-based index of the user's current standard step."
+        ...,
+        description="The 0-based index of the user's current task in their personalized sequence."
     )
     total_steps: int = Field(
-        ..., 
-        description="The total number of standard steps in the flow definition."
+        ...,
+        description="Total number of tasks in the user's personalized flow (includes injected tasks)."
     )
     completion_ratio: str = Field(
         ...,
         description=(
-            "Step completion ratio as a human-readable fraction (e.g., '1/6'). "
+            "Task completion ratio as a human-readable fraction (e.g., '4/9'). "
             "Suitable for direct display in UI labels."
         ),
-        examples=["1/6", "3/6", "6/6"],
+        examples=["0/8", "4/9", "9/9"],
     )
     is_terminal: bool = Field(
         ...,
@@ -136,6 +137,37 @@ class UserStatusResponse(BaseModel):
         default_factory=dict, 
         alias="_links", # Adheres to HAL/HATEOAS JSON standards by prefixing with underscore
         description="HATEOAS links detailing the next permitted actions for this user."
+    )
+
+
+class TaskState(str, Enum):
+    """State of a task within a user's personalized flow."""
+    COMPLETED = "COMPLETED"
+    CURRENT = "CURRENT"
+    PENDING = "PENDING"
+
+
+class PersonalizedTaskItem(BaseModel):
+    """Represents a single task entry in a user's personalized flow sequence."""
+    task_id: str = Field(..., description="Unique task identifier")
+    state: TaskState = Field(..., description="COMPLETED, CURRENT, or PENDING")
+    is_injected: bool = Field(
+        ...,
+        description="True if this task was dynamically injected (not part of the default flow)"
+    )
+
+
+class UserFlowResponse(BaseModel):
+    """
+    Response model for the personalized flow endpoint.
+    Returns the user's specific ordered task sequence with per-task state annotations.
+    """
+    user_id: str = Field(..., description="The unique User ID")
+    status: Status = Field(..., description="Overall admission status")
+    total_tasks: int = Field(..., description="Total task count in this user's personalized path")
+    tasks: List[PersonalizedTaskItem] = Field(
+        ...,
+        description="Ordered personalized task sequence with state annotations"
     )
 
 

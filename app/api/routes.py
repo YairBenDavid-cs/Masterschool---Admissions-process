@@ -16,7 +16,10 @@ from app.models.schemas import (
     UserStatusResponse,
     TaskCompleteRequest,
     FlowDefinitionResponse,
-    ProgressInfo
+    ProgressInfo,
+    TaskState,
+    PersonalizedTaskItem,
+    UserFlowResponse,
 )
 
 # Local Application — Services & Exceptions
@@ -24,6 +27,8 @@ from app.services.admissions import (
     create_new_user,
     get_user_record,
     process_task_completion,
+    get_user_flow,
+    build_personalized_task_sequence,
     UserNotFoundError,
     EmailAlreadyExistsError,
     WorkflowStateError,
@@ -250,6 +255,75 @@ def get_user_status(
 
 
 # =============================================================================
+# 6. GET - Retrieve the personalized flow for a specific user
+# =============================================================================
+
+@router.get(
+    "/users/{user_id}/flow",
+    summary="Get Candidate's Personalized Flow",
+    response_model=UserFlowResponse,
+    status_code=status.HTTP_200_OK
+)
+def get_user_personalized_flow(
+    user_id: str,
+    repo: UserRepository = Depends(get_repo),
+    flow: FlowConfig = Depends(get_flow_config)
+) -> UserFlowResponse:
+    """
+    Returns the user's personalized ordered task sequence with per-task state annotations.
+
+    Merges the global default steps with any dynamically injected tasks (e.g., second_chance_iq),
+    inserting custom tasks at the correct logical position. Each task is annotated as
+    COMPLETED, CURRENT, or PENDING based on the user's current FSM position.
+
+    Args:
+        user_id (str): The unique identifier of the user (path parameter).
+        repo (UserRepository): The injected persistence layer dependency.
+        flow (FlowConfig): The injected FSM configuration dependency.
+
+    Returns:
+        UserFlowResponse: The personalized task list with states and total task count.
+
+    Raises:
+        HTTPException: 404 Not Found if the user ID does not exist.
+    """
+    try:
+        user, task_sequence = get_user_flow(user_id, repo, flow)
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+    # Determine the anchor task for state assignment
+    if user.is_terminated():
+        anchor_task = user.last_completed_task
+    else:
+        anchor_task = user.current_task
+
+    # Walk the sequence and assign states
+    tasks: list[PersonalizedTaskItem] = []
+    found_anchor = False
+    for task_id in task_sequence:
+        if task_id == anchor_task:
+            state = TaskState.COMPLETED if user.is_terminated() else TaskState.CURRENT
+            found_anchor = True
+        elif not found_anchor:
+            state = TaskState.COMPLETED
+        else:
+            state = TaskState.COMPLETED if user.status == Status.ACCEPTED else TaskState.PENDING
+        tasks.append(PersonalizedTaskItem(
+            task_id=task_id,
+            state=state,
+            is_injected=task_id in user.custom_flow
+        ))
+
+    return UserFlowResponse(
+        user_id=user.id,
+        status=user.status,
+        total_tasks=len(task_sequence),
+        tasks=tasks
+    )
+
+
+# =============================================================================
 # HELPER FUNCTIONS
 # =============================================================================
 
@@ -270,29 +344,28 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
         UserStatusResponse: A fully enriched response DTO containing user
             state, progress info, and HATEOAS navigation links.
     """
-    step_names = [step.name for step in flow.default_steps]
-    total_steps = len(step_names)
-
-    # 1. Progress Logic Fix
+    # Build personalized task sequence for dynamic, per-user progress
+    task_sequence = build_personalized_task_sequence(user, flow)
+    total_tasks = len(task_sequence)
     is_terminal = user.status in [Status.ACCEPTED, Status.REJECTED]
 
-    try:
-        current_idx = step_names.index(user.current_step) 
-        completion_ratio = f"{current_idx}/{total_steps}" if total_steps > 0 else "0/0"
-    except ValueError:
-        # If step is not in default steps (e.g., TERMINAL_REJECTED)
-        if user.status == Status.ACCEPTED:
-            current_idx = total_steps
-            completion_ratio = f"{total_steps}/{total_steps}"
+    if not is_terminal and user.current_task and user.current_task in task_sequence:
+        current_idx = task_sequence.index(user.current_task)
+        completion_ratio = f"{current_idx}/{total_tasks}"
+    elif user.status == Status.ACCEPTED:
+        current_idx = total_tasks
+        completion_ratio = f"{total_tasks}/{total_tasks}"
+    else:
+        # REJECTED: use last_completed_task position if available for accurate display
+        if user.last_completed_task and user.last_completed_task in task_sequence:
+            current_idx = task_sequence.index(user.last_completed_task) + 1
         else:
-            # If rejected or unknown, don't pretend it's 100%.
-            # We keep current_idx at 0 or a previous known state if we tracked it (simplified here).
             current_idx = 0
-            completion_ratio = f"0/{total_steps}"
+        completion_ratio = f"{current_idx}/{total_tasks}"
 
     progress_info = ProgressInfo(
         current_step_index=current_idx,
-        total_steps=total_steps,
+        total_steps=total_tasks,
         completion_ratio=completion_ratio,
         is_terminal=is_terminal,
     )
