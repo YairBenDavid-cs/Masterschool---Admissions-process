@@ -40,3 +40,7 @@ Thumbs.db
 
 # Agent-specific files
 /.claude
+
+# git artifacts
+.gitignore
+.git/
