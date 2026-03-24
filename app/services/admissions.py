@@ -1,6 +1,12 @@
+"""
+Service layer orchestrating admissions workflow operations and FSM state transitions.
+"""
+
+# Standard Library
 import uuid
 from typing import Any, Dict, List, Optional
 
+# Local Application
 from app.models.domain import User
 from app.repository.base import UserRepository
 from app.core.config_models import FlowConfig, Status, StepBlueprint, TransitionRule
@@ -9,7 +15,10 @@ from app.core.logging_config import get_logger
 
 logger = get_logger(__name__)
 
-# --- Custom Service Exceptions ---
+
+# =============================================================================
+# Custom Service Exceptions
+# =============================================================================
 
 class UserNotFoundError(Exception):
     """Raised when a specific user ID cannot be found in the repository."""
@@ -31,7 +40,10 @@ class ConfigurationError(Exception):
     """Raised when there is an inconsistency in the FSM configuration metadata."""
     pass
 
-# --- Service Layer Logic ---
+
+# =============================================================================
+# Service Layer Logic
+# =============================================================================
 
 def create_new_user(email: str, repo: UserRepository, flow: FlowConfig) -> User:
     """
@@ -60,7 +72,7 @@ def create_new_user(email: str, repo: UserRepository, flow: FlowConfig) -> User:
         raise ConfigurationError("FSM configuration must have at least one default step.")
 
     first_step = flow.default_steps[0]
-    
+
     new_user = User(
         id=str(uuid.uuid4()),
         email=email,
@@ -105,7 +117,7 @@ def process_task_completion(
     Orchestrates the completion of a task and calculates the next state.
 
     This function enforces business rules, invokes the FSM Engine for decisions,
-    and handles 'dynamic task injection' into the user's custom_flow based on 
+    and handles 'dynamic task injection' into the user's custom_flow based on
     explicit metadata flags in the configuration.
 
     Args:
@@ -153,7 +165,7 @@ def process_task_completion(
     # 2. Apply State Change
     user.current_step = transition.next_step
     user.current_task = transition.next_task
-    
+
     if transition.mark_status:
         user.status = transition.mark_status
 
@@ -167,9 +179,17 @@ def process_task_completion(
 def _update_custom_flow(user: User, transition: TransitionRule) -> None:
     """
     Handles the injection of dynamic tasks into the user's personal custom_flow list.
-    
+
     This is triggered by the 'inject_to_custom_flow' flag in the transition rule,
     making the system truly flexible and configuration-driven.
+
+    Args:
+        user (User): The user entity whose custom_flow may be modified.
+        transition (TransitionRule): The matched transition rule containing
+            the injection flag and the next_task to potentially inject.
+
+    Returns:
+        None
     """
     if transition.inject_to_custom_flow and transition.next_task != "NONE":
         if transition.next_task not in user.custom_flow:
