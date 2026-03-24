@@ -1,3 +1,7 @@
+"""
+Abstract repository interface defining the contract for user data persistence.
+"""
+
 import abc
 from typing import Optional
 from app.models.domain import User

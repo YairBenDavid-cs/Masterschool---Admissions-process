@@ -1,3 +1,7 @@
+"""
+In-memory implementation of the UserRepository using Python dictionaries.
+"""
+
 from typing import Dict, Optional
 from app.models.domain import User
 from app.repository.base import UserRepository
