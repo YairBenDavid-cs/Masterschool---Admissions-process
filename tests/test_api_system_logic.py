@@ -53,9 +53,10 @@ def test_hateoas_progress_in_responses():
     data = response.json()
     assert "progress" in data
     assert data["progress"]["current_step_index"] == 0
-    total = len(get_flow_blueprint()["steps"])
-    assert data["progress"]["total_steps"] == total
-    assert data["progress"]["completion_ratio"] == f"0/{total}"
+    blueprint = get_flow_blueprint()
+    total_tasks = sum(len(step["tasks"]) for step in blueprint["steps"])
+    assert data["progress"]["total_steps"] == total_tasks
+    assert data["progress"]["completion_ratio"] == f"0/{total_tasks}"
     assert "is_terminal" in data["progress"]
     assert data["progress"]["is_terminal"] is False
 
@@ -361,3 +362,272 @@ def test_health_check_endpoint():
     # Assert
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
+
+
+# =============================================================================
+# 5. Personalized Flow Endpoint
+# =============================================================================
+
+def test_get_user_flow_not_found_returns_404():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that a 404 is returned for an unknown user.
+
+    Expected Behavior:
+        A request for a non-existent user_id returns HTTP 404.
+    """
+    response = client.get("/api/v1/users/non-existent-id/flow")
+    assert response.status_code == 404
+
+
+def test_get_user_flow_returns_all_default_tasks():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that a new user gets 8 default tasks
+    in the correct order matching the flow blueprint.
+
+    Expected Behavior:
+        total_tasks == number of tasks across all default steps,
+        tasks list contains all expected task IDs in correct order.
+    """
+    # Arrange
+    blueprint = get_flow_blueprint()
+    expected_task_ids = [task for step in blueprint["steps"] for task in step["tasks"]]
+    user_id = client.post("/api/v1/users", json={"email": "flow.default@test.com"}).json()["user_id"]
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_tasks"] == len(expected_task_ids)
+    actual_task_ids = [t["task_id"] for t in data["tasks"]]
+    assert actual_task_ids == expected_task_ids
+
+
+def test_get_user_flow_first_task_is_current_rest_pending():
+    """
+    [Layer A] GET /users/{id}/flow - Validates state assignment for a new user.
+
+    Expected Behavior:
+        The first task has state CURRENT, all subsequent tasks are PENDING,
+        and no tasks are COMPLETED for a brand-new user.
+    """
+    # Arrange
+    user_id = client.post("/api/v1/users", json={"email": "flow.states@test.com"}).json()["user_id"]
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    assert response.status_code == 200
+    tasks = response.json()["tasks"]
+    assert tasks[0]["state"] == "CURRENT"
+    for task in tasks[1:]:
+        assert task["state"] == "PENDING"
+
+
+def test_get_user_flow_no_injected_tasks_by_default():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that is_injected is False for all
+    tasks in a default (non-injected) user's flow.
+
+    Expected Behavior:
+        All tasks have is_injected=False when no custom_flow tasks are present.
+    """
+    # Arrange
+    user_id = client.post("/api/v1/users", json={"email": "flow.no_inject@test.com"}).json()["user_id"]
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    tasks = response.json()["tasks"]
+    assert all(t["is_injected"] is False for t in tasks)
+
+
+def test_get_user_flow_second_chance_injected_correctly():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that after a score in the injection
+    range, the second_chance task is present with is_injected=True and total_tasks increases.
+
+    Expected Behavior:
+        total_tasks == 9, second_chance_iq appears after perform_iq_test,
+        is_injected=True for the injected task only.
+    """
+    # Arrange
+    blueprint = get_flow_blueprint()
+    injection_step, injection_task = find_injection_task(blueprint)
+    if not injection_task:
+        pytest.skip("No injection task found in current flow_config.json")
+
+    default_total = sum(len(step["tasks"]) for step in blueprint["steps"])
+    initial_user = client.post("/api/v1/users", json={"email": "flow.inject@test.com"}).json()
+    user_id = initial_user["user_id"]
+
+    # Navigate to the injection task and trigger injection with score 65
+    user_data = navigate_to_task(user_id, injection_task, initial_user)
+    res = client.put("/api/v1/tasks/complete", json={
+        "user_id": user_id,
+        "current_step": user_data["current_step"],
+        "current_task": injection_task,
+        "task_payload": {"score": 65}
+    })
+    assert res.status_code == 200
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total_tasks"] == default_total + 1
+
+    task_ids = [t["task_id"] for t in data["tasks"]]
+    injection_pos = task_ids.index(injection_task)
+    injected_task_id = data["custom_flow"] if "custom_flow" in data else None
+
+    # The injected task must appear immediately after the trigger task
+    injected_items = [t for t in data["tasks"] if t["is_injected"] is True]
+    assert len(injected_items) == 1
+    assert task_ids.index(injected_items[0]["task_id"]) == injection_pos + 1
+
+
+def test_get_user_flow_second_chance_task_is_current():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that after injection, the injected task
+    is CURRENT and all preceding tasks are COMPLETED.
+
+    Expected Behavior:
+        submit_personal_details → COMPLETED
+        perform_iq_test → COMPLETED
+        second_chance_iq → CURRENT
+        All remaining tasks → PENDING
+    """
+    # Arrange
+    blueprint = get_flow_blueprint()
+    injection_step, injection_task = find_injection_task(blueprint)
+    if not injection_task:
+        pytest.skip("No injection task found in current flow_config.json")
+
+    initial_user = client.post("/api/v1/users", json={"email": "flow.second_chance@test.com"}).json()
+    user_id = initial_user["user_id"]
+
+    user_data = navigate_to_task(user_id, injection_task, initial_user)
+    client.put("/api/v1/tasks/complete", json={
+        "user_id": user_id,
+        "current_step": user_data["current_step"],
+        "current_task": injection_task,
+        "task_payload": {"score": 65}
+    })
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    tasks = response.json()["tasks"]
+    found_current = False
+    for task in tasks:
+        if task["state"] == "CURRENT":
+            found_current = True
+            assert task["is_injected"] is True
+        elif not found_current:
+            assert task["state"] == "COMPLETED"
+        else:
+            assert task["state"] == "PENDING"
+    assert found_current, "Expected exactly one CURRENT task"
+
+
+def test_get_user_flow_accepted_all_completed():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that after completing the full flow
+    (ACCEPTED), all tasks are marked COMPLETED.
+
+    Expected Behavior:
+        status=ACCEPTED and every task has state=COMPLETED.
+    """
+    # Arrange
+    initial_user = client.post("/api/v1/users", json={"email": "flow.accepted@test.com"}).json()
+    user_id = initial_user["user_id"]
+    user_data = navigate_to_step(user_id, "NON_EXISTENT_STEP_TO_FORCE_COMPLETION", initial_user)
+    assert user_data["status"] == "ACCEPTED"
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ACCEPTED"
+    assert all(t["state"] == "COMPLETED" for t in data["tasks"])
+
+
+def test_get_user_flow_rejected_states_split_correctly():
+    """
+    [Layer A] GET /users/{id}/flow - Validates that after rejection, tasks up to and
+    including the last completed task are COMPLETED, and subsequent tasks are PENDING.
+
+    Expected Behavior:
+        Tasks before and at the rejection point → COMPLETED
+        Tasks after the rejection point → PENDING
+        No CURRENT tasks (user is terminal)
+    """
+    # Arrange — Reject by failing IQ test (score < 60)
+    blueprint = get_flow_blueprint()
+    injection_step, injection_task = find_injection_task(blueprint)
+    if not injection_task:
+        pytest.skip("No injection task found in current flow_config.json")
+
+    initial_user = client.post("/api/v1/users", json={"email": "flow.rejected@test.com"}).json()
+    user_id = initial_user["user_id"]
+
+    user_data = navigate_to_task(user_id, injection_task, initial_user)
+    res = client.put("/api/v1/tasks/complete", json={
+        "user_id": user_id,
+        "current_step": user_data["current_step"],
+        "current_task": injection_task,
+        "task_payload": {"score": 30}  # Below threshold → REJECTED
+    })
+    assert res.status_code == 200
+    assert res.json()["status"] == "REJECTED"
+
+    # Act
+    response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "REJECTED"
+    states = [t["state"] for t in data["tasks"]]
+    assert "CURRENT" not in states
+    # There must be at least one COMPLETED task and at least one PENDING task
+    assert "COMPLETED" in states
+    assert "PENDING" in states
+    # All PENDING tasks must come after all COMPLETED tasks
+    seen_pending = False
+    for s in states:
+        if s == "PENDING":
+            seen_pending = True
+        elif s == "COMPLETED" and seen_pending:
+            pytest.fail("Found COMPLETED task after a PENDING task — ordering is wrong")
+
+
+def test_get_user_flow_total_tasks_matches_progress_total_steps():
+    """
+    [Layer A] Validates that total_tasks in the flow endpoint equals total_steps in
+    the progress object — both must reflect the same personalized count.
+
+    Expected Behavior:
+        UserFlowResponse.total_tasks == UserStatusResponse.progress.total_steps
+        for the same user at any point in their journey.
+    """
+    # Arrange
+    res = client.post("/api/v1/users", json={"email": "flow.sync@test.com"})
+    user_id = res.json()["user_id"]
+    progress_total = res.json()["progress"]["total_steps"]
+
+    # Act
+    flow_response = client.get(f"/api/v1/users/{user_id}/flow")
+
+    # Assert
+    assert flow_response.status_code == 200
+    assert flow_response.json()["total_tasks"] == progress_total

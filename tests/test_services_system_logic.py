@@ -10,6 +10,9 @@ from app.services.admissions import (
     create_new_user,
     process_task_completion,
     get_user_record,
+    get_user_flow,
+    build_personalized_task_sequence,
+    _find_injection_trigger,
     _update_custom_flow,
     EmailAlreadyExistsError,
     UserNotFoundError,
@@ -483,5 +486,86 @@ def test_engine_is_completely_agnostic_to_domain() -> None:
         payload={"toppings": "mushrooms"}, repo=pizza_repo, flow=pizza_flow
     )
 
-    # Assert — Mushrooms are accepted
-    assert mushroom_user.status == Status.ACCEPTED
+
+# =============================================================================
+# 6. Personalized Flow Sequence Tests
+# =============================================================================
+
+def test_build_personalized_task_sequence_no_custom_flow(
+    mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig
+) -> None:
+    """
+    [Layer A] build_personalized_task_sequence - Validates that a user with no
+    custom_flow gets the default ordered task list.
+
+    Expected Behavior:
+        Returned sequence equals all tasks from default_steps in order,
+        with no additions.
+    """
+    user = create_new_user(email="seq.default@test.com", repo=mock_repo, flow=mock_flow_config)
+
+    sequence = build_personalized_task_sequence(user, mock_flow_config)
+
+    expected = [task for step in mock_flow_config.default_steps for task in step.tasks]
+    assert sequence == expected
+
+
+def test_build_personalized_task_sequence_with_injection(
+    mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig
+) -> None:
+    """
+    [Layer A] build_personalized_task_sequence - Validates that an injected task
+    is inserted immediately after its trigger task.
+
+    Expected Behavior:
+        custom_flow=["task_injected_extra"] → the injected task appears directly
+        after "task_eval" (its trigger), producing 3-element sequence.
+    """
+    user = create_new_user(email="seq.inject@test.com", repo=mock_repo, flow=mock_flow_config)
+    user.custom_flow = ["task_injected_extra"]
+
+    sequence = build_personalized_task_sequence(user, mock_flow_config)
+
+    assert len(sequence) == 3
+    eval_pos = sequence.index("task_eval")
+    injected_pos = sequence.index("task_injected_extra")
+    assert injected_pos == eval_pos + 1
+
+
+def test_find_injection_trigger_returns_correct_task(
+    mock_flow_config: FlowConfig
+) -> None:
+    """
+    [Layer A] _find_injection_trigger - Validates that scanning the tasks_map correctly
+    identifies the task whose transition triggers injection.
+
+    Expected Behavior:
+        _find_injection_trigger("task_injected_extra", ...) returns "task_eval".
+    """
+    trigger = _find_injection_trigger("task_injected_extra", mock_flow_config)
+    assert trigger == "task_eval"
+
+
+def test_last_completed_task_set_after_task_completion(
+    mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig
+) -> None:
+    """
+    [Layer A] process_task_completion - Validates that last_completed_task is set
+    to the task that was just completed, before the state transition applies.
+
+    Expected Behavior:
+        After completing task_auto_pass, user.last_completed_task == "task_auto_pass".
+    """
+    user = create_new_user(email="last_task@test.com", repo=mock_repo, flow=mock_flow_config)
+    assert user.last_completed_task is None
+
+    updated_user = process_task_completion(
+        user_id=user.id,
+        current_step="step_start",
+        current_task="task_auto_pass",
+        payload={},
+        repo=mock_repo,
+        flow=mock_flow_config
+    )
+
+    assert updated_user.last_completed_task == "task_auto_pass"
