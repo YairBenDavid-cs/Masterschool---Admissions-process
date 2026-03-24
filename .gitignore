@@ -17,3 +17,23 @@ venv/
 
 # environment variables
 .env
+
+# Test coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# Type checkers / linters
+.mypy_cache/
+.ruff_cache/
+
+# Build / packaging
+*.egg-info/
+dist/
+build/
+
+# Logs
+*.log
+
+# OS artifacts
+Thumbs.db
