@@ -64,14 +64,14 @@ def post_register(email: str) -> httpx.Response:
 
 def put_complete_task(
     user_id: str,
-    current_step: str,
-    current_task: str,
+    step_name: str,
+    task_name: str,
     task_payload: dict,
 ) -> httpx.Response:
     return get_client().put("/api/v1/tasks/complete", json={
         "user_id":      user_id,
-        "step_name":    current_step,
-        "task_name":    current_task,
+        "step_name":    step_name,
+        "task_name":    task_name,
         "task_payload": task_payload,
     })
 
@@ -84,14 +84,14 @@ def get_user_flow(user_id: str) -> httpx.Response:
 # TASK WIDGET
 # =============================================================================
 
-def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
+def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
     """
     Render a task-specific UI widget and return the payload dict when the
     user submits. Returns None if the user hasn't acted yet.
     """
 
     # --- Specific task: IQ Test ---
-    if current_task == "perform_iq_test":
+    if task_name == "perform_iq_test":
         import time
         st.markdown("#### IQ Assessment")
         st.markdown("Select the range that best describes your result:")
@@ -104,7 +104,7 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
         return None
 
     # --- Specific task: Second-chance IQ ---
-    if current_task == "second_chance_iq":
+    if task_name == "second_chance_iq":
         st.markdown("#### Second-Chance IQ Assessment")
         st.info("You qualify for a second attempt. Make it count!")
         labels  = [f"{name} (score: {val})" for name, val in IQ_TIERS]
@@ -116,7 +116,7 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
         return None
 
     # --- Specific task: Interview ---
-    if current_task == "perform_interview":
+    if task_name == "perform_interview":
         import time
         st.markdown("#### Interview Outcome")
         st.markdown("Record the interviewer's final decision:")
@@ -135,7 +135,7 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
 
     # --- AUTO-PASS tasks (empty schema) ---
     if not schema:
-        icon, label = TASK_LABELS.get(current_task, ("▶️", current_task.replace("_", " ").title()))
+        icon, label = TASK_LABELS.get(task_name, ("▶️", task_name.replace("_", " ").title()))
         st.info(f"{icon}  Ready to proceed: **{label}**")
         if st.button("Continue →", use_container_width=True, type="primary"):
             return {}
@@ -208,8 +208,8 @@ def flow_page() -> None:
     user_id   = st.session_state.user_id
     user_data = st.session_state.user_data
 
-    current_step = user_data.get("current_step", "")
-    current_task = user_data.get("current_task", "")
+    step_name = user_data.get("step_name", "")
+    task_name = user_data.get("task_name", "")
     schema       = user_data.get("current_task_schema", [])
     progress     = user_data.get("progress", {})
 
@@ -230,7 +230,7 @@ def flow_page() -> None:
     total = progress.get("total_steps", 1)
     ratio = idx / total if total else 0.0
 
-    step_display = STEP_DISPLAY_NAMES.get(current_step, current_step.replace("_", " ").title())
+    step_display = STEP_DISPLAY_NAMES.get(step_name, step_name.replace("_", " ").title())
     st.progress(ratio)
     st.caption(f"Step {idx} of {total}  ·  **{step_display}**")
     st.divider()
@@ -239,11 +239,11 @@ def flow_page() -> None:
     st.markdown(f"### {step_display}")
 
     # --- Dynamic Task Widget ---
-    payload = render_task_widget(current_task, schema)
+    payload = render_task_widget(task_name, schema)
 
     if payload is not None:
         with st.spinner("Processing..."):
-            resp = put_complete_task(user_id, current_step, current_task, payload)
+            resp = put_complete_task(user_id, step_name, task_name, payload)
 
         if resp.status_code == 200:
             st.session_state.user_data = resp.json()

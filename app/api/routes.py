@@ -207,8 +207,8 @@ def get_user_current_step_and_task(
         repo (UserRepository): The injected persistence layer dependency.
 
     Returns:
-        Dict[str, str]: A dictionary containing 'current_step' and
-            'current_task' keys.
+        Dict[str, str]: A dictionary containing 'step_name' and
+            'task_name' keys.
 
     Raises:
         HTTPException: 404 Not Found if the user ID does not exist.
@@ -216,8 +216,8 @@ def get_user_current_step_and_task(
     try:
         user = get_user_record(user_id=str(user_id), repo=repo)
         return {
-            "current_step": user.current_step,
-            "current_task": user.current_task
+            "step_name": user.step_name,
+            "task_name": user.task_name
         }
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -248,7 +248,7 @@ def complete_task(
 
     Args:
         request (TaskCompleteRequest): The incoming payload containing
-            user_id, current_step, current_task, and task_payload.
+            user_id, step_name, task_name, and task_payload.
         repo (UserRepository): The injected persistence layer dependency.
         flow (FlowConfig): The injected FSM configuration dependency.
 
@@ -263,8 +263,8 @@ def complete_task(
     try:
         user = process_task_completion(
             user_id=str(request.user_id),
-            current_step=request.step_name,
-            current_task=request.task_name,
+            step_name=request.step_name,
+            task_name=request.task_name,
             payload=request.task_payload,
             repo=repo,
             flow=flow
@@ -353,8 +353,8 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
     total_tasks = len(task_sequence)
     is_terminal = user.status in [Status.ACCEPTED, Status.REJECTED]
 
-    if not is_terminal and user.current_task and user.current_task in task_sequence:
-        current_idx = task_sequence.index(user.current_task)
+    if not is_terminal and user.task_name and user.task_name in task_sequence:
+        current_idx = task_sequence.index(user.task_name)
         completion_ratio = f"{current_idx}/{total_tasks}"
     elif user.status == Status.ACCEPTED:
         current_idx = total_tasks
@@ -387,13 +387,13 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
         links["next_action"] = {
             "href": "/api/v1/tasks/complete",
             "method": "PUT",
-            "description": f"Submit payload for task: {user.current_task}"
+            "description": f"Submit payload for task: {user.task_name}"
         }
 
     # 3. JIT Schema Discovery: include the current task's payload contract
     current_task_schema = []
-    if user.status == Status.IN_PROGRESS and user.current_task:
-        task_bp = flow.tasks_map.get(user.current_task)
+    if user.status == Status.IN_PROGRESS and user.task_name:
+        task_bp = flow.tasks_map.get(user.task_name)
         if task_bp:
             current_task_schema = task_bp.payload_schema
 
@@ -401,8 +401,8 @@ def _build_user_response(user: User, flow: FlowConfig) -> UserStatusResponse:
         user_id=user.id,
         email=user.email,
         status=user.status,
-        current_step=user.current_step,
-        current_task=user.current_task,
+        step_name=user.step_name,
+        task_name=user.task_name,
         custom_flow=user.custom_flow,
         progress=progress_info,
         _links=links,

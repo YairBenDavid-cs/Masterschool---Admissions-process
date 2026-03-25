@@ -81,7 +81,7 @@ def print_hateoas_discovery(resp_json: dict) -> None:
         print(f"  {_YELLOW}    → next_action: {method} {href}  (\"{desc}\"){_RESET}")
 
     if schema:
-        task_name = resp_json.get("current_task", "?")
+        task_name = resp_json.get("task_name", "?")
         print(f"\n  {_YELLOW}{_BOLD}[!] JIT Schema: Task schema discovered for '{task_name}'.{_RESET}")
         for field in schema:
             key   = field.get("key_name", "?")
@@ -235,17 +235,17 @@ def action_complete_task(
         return None
 
     current_data  = current_resp.json()
-    current_step  = current_data.get("current_step", "")
-    current_task  = current_data.get("current_task", "")
-    print(f"\n  Current step: {_BOLD}{current_step}{_RESET}  │  "
-          f"Current task: {_BOLD}{current_task}{_RESET}")
+    step_name  = current_data.get("step_name", "")
+    task_name  = current_data.get("task_name", "")
+    print(f"\n  Current step: {_BOLD}{step_name}{_RESET}  │  "
+          f"Current task: {_BOLD}{task_name}{_RESET}")
 
     # 4. Show JIT schema hints from last_response
     schema = (last_response or {}).get("current_task_schema", [])
     if not schema:
         print(f"\n  {_YELLOW}  AUTO-PASS — no payload fields required.{_RESET}")
     else:
-        print(f"\n  {_YELLOW}Task schema for '{current_task}':{_RESET}")
+        print(f"\n  {_YELLOW}Task schema for '{task_name}':{_RESET}")
         for field in schema:
             key   = field.get("key_name", "?")
             vtype = field.get("value_type", "?")
@@ -277,17 +277,17 @@ def action_complete_task(
     # else AUTO_PASS → task_payload stays {}
 
     # 6. Allow override of task_name (step_name is used silently)
-    print(f"\n  task_name  (Enter for '{current_task}'): ", end="")
+    print(f"\n  task_name  (Enter for '{task_name}'): ", end="")
     override_task = input().strip()
     if override_task:
-        current_task = override_task
+        task_name = override_task
 
     # 7. PUT
     url     = "/api/v1/tasks/complete"
     body    = {
         "user_id":      user_id,
-        "step_name":    current_step,
-        "task_name":    current_task,
+        "step_name":    step_name,
+        "task_name":    task_name,
         "task_payload": task_payload,
     }
     print_request("PUT", BASE_URL + url, body)

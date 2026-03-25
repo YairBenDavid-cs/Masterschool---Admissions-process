@@ -87,8 +87,8 @@ def navigate_to_step(
     """
     Helper to dynamically advance a user to a specific step.
 
-    Repeatedly submits task completions using the API-provided current_step
-    and current_task until the user reaches the target step or a terminal
+    Repeatedly submits task completions using the API-provided step_name
+    and task_name until the user reaches the target step or a terminal
     state. Accepts an optional custom_payloads dict to override standard
     passing payloads for specific tasks.
 
@@ -96,7 +96,7 @@ def navigate_to_step(
         user_id (str): The unique identifier of the user to advance.
         target_step (str): The name of the step to navigate toward.
         current_user_data (dict): The current API response containing
-            the user's state (current_step, current_task, status).
+            the user's state (step_name, task_name, status).
         custom_payloads (dict): Optional mapping of task_name to payload
             dict, used to override the default passing payload for
             specific tasks.
@@ -112,23 +112,23 @@ def navigate_to_step(
     max_iterations = 20  # Circuit breaker to prevent infinite loops
 
     for _ in range(max_iterations):
-        if user_data["current_step"] == target_step or user_data["status"] != "IN_PROGRESS":
+        if user_data["step_name"] == target_step or user_data["status"] != "IN_PROGRESS":
             break
 
-        current_task = user_data["current_task"]
+        task_name = user_data["task_name"]
 
         # Use custom payload if provided, otherwise fall back to spec-compliant defaults
-        task_payload = custom_payloads.get(current_task, DEFAULT_TASK_PAYLOADS.get(current_task, {}))
+        task_payload = custom_payloads.get(task_name, DEFAULT_TASK_PAYLOADS.get(task_name, {}))
 
         payload = {
             "user_id": user_id,
-            "step_name": user_data["current_step"],
-            "task_name": current_task,
+            "step_name": user_data["step_name"],
+            "task_name": task_name,
             "task_payload": task_payload
         }
 
         res = client.put("/api/v1/tasks/complete", json=payload)
-        assert res.status_code == 200, f"Navigation failed at task '{current_task}'. Response: {res.text}"
+        assert res.status_code == 200, f"Navigation failed at task '{task_name}'. Response: {res.text}"
         user_data = res.json()
 
     return user_data
@@ -149,7 +149,7 @@ def navigate_to_task(
         user_id (str): The unique identifier of the user to advance.
         target_task (str): The name of the task to navigate toward.
         current_user_data (dict): The current API response containing
-            the user's state (current_step, current_task, status).
+            the user's state (step_name, task_name, status).
         custom_payloads (dict): Optional mapping of task_name to payload
             dict, used to override the default passing payload for
             specific tasks.
@@ -165,23 +165,23 @@ def navigate_to_task(
     max_iterations = 20  # Circuit breaker to prevent infinite loops
 
     for _ in range(max_iterations):
-        if user_data["current_task"] == target_task or user_data["status"] != "IN_PROGRESS":
+        if user_data["task_name"] == target_task or user_data["status"] != "IN_PROGRESS":
             break
 
-        current_task = user_data["current_task"]
+        task_name = user_data["task_name"]
 
         # Use custom payload if provided, otherwise fall back to spec-compliant defaults
-        task_payload = custom_payloads.get(current_task, DEFAULT_TASK_PAYLOADS.get(current_task, {}))
+        task_payload = custom_payloads.get(task_name, DEFAULT_TASK_PAYLOADS.get(task_name, {}))
 
         payload = {
             "user_id": user_id,
-            "step_name": user_data["current_step"],
-            "task_name": current_task,
+            "step_name": user_data["step_name"],
+            "task_name": task_name,
             "task_payload": task_payload
         }
 
         res = client.put("/api/v1/tasks/complete", json=payload)
-        assert res.status_code == 200, f"Navigation failed at task '{current_task}'. Response: {res.text}"
+        assert res.status_code == 200, f"Navigation failed at task '{task_name}'. Response: {res.text}"
         user_data = res.json()
 
     return user_data

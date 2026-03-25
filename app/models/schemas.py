@@ -121,8 +121,8 @@ class UserStatusResponse(BaseModel):
     email: EmailStr = Field(..., description="The user's registered email.")
     status: Status = Field(..., description="The overarching status (IN_PROGRESS, ACCEPTED, REJECTED).")
     
-    current_step: Optional[str] = Field(None, description="The programmatic name of the current step.")
-    current_task: Optional[str] = Field(None, description="The programmatic name of the pending task.")
+    step_name: Optional[str] = Field(None, description="The programmatic name of the current step.")
+    task_name: Optional[str] = Field(None, description="The programmatic name of the pending task.")
     
     custom_flow: List[str] = Field(
         default_factory=list, 

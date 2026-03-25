@@ -88,8 +88,8 @@ def create_new_user(email: str, repo: UserRepository, flow: FlowConfig) -> User:
     new_user = User(
         id=str(uuid.uuid4()),
         email=email,
-        current_step=first_step.name,
-        current_task=first_step.tasks[0] if first_step.tasks else None,
+        step_name=first_step.name,
+        task_name=first_step.tasks[0] if first_step.tasks else None,
         status=Status.IN_PROGRESS,
         custom_flow=[]
     )
@@ -119,8 +119,8 @@ def get_user_record(user_id: str, repo: UserRepository) -> User:
 
 def process_task_completion(
     user_id: str,
-    current_step: str,
-    current_task: str,
+    step_name: str,
+    task_name: str,
     payload: Dict[str, Any],
     repo: UserRepository,
     flow: FlowConfig
@@ -134,8 +134,8 @@ def process_task_completion(
 
     Args:
         user_id (str): The user's ID.
-        current_step (str): The step being submitted.
-        current_task (str): The task being submitted.
+        step_name (str): The step being submitted.
+        task_name (str): The task being submitted.
         payload (Dict[str, Any]): The data associated with the completion.
         repo (UserRepository): Persistence layer.
         flow (FlowConfig): FSM blueprint.
@@ -156,16 +156,16 @@ def process_task_completion(
         raise WorkflowStateError(f"User {user_id} is already in a terminal state: {user.status}")
 
     # Guard Clause: Anti-cheat / State synchronization
-    if user.current_step != current_step or user.current_task != current_task:
+    if user.step_name != step_name or user.task_name != task_name:
         raise TaskMismatchError(
-            f"State mismatch. User is on {user.current_step}/{user.current_task}, "
-            f"but submitted {current_step}/{current_task}."
+            f"State mismatch. User is on {user.step_name}/{user.task_name}, "
+            f"but submitted {step_name}/{task_name}."
         )
 
     # Retrieve blueprint for the current task
-    task_blueprint = flow.tasks_map.get(current_task)
+    task_blueprint = flow.tasks_map.get(task_name)
     if not task_blueprint:
-        raise ConfigurationError(f"Task blueprint '{current_task}' not found in configuration.")
+        raise ConfigurationError(f"Task blueprint '{task_name}' not found in configuration.")
 
     # Validate payload against the task's declared schema contract
     # PayloadValidationError propagates to the route layer → HTTP 422
@@ -179,9 +179,9 @@ def process_task_completion(
         raise ConfigurationError("Decision engine failure.") from exc
 
     # 2. Apply State Change (capture last task before overwriting)
-    user.last_completed_task = current_task
-    user.current_step = transition.next_step
-    user.current_task = transition.next_task
+    user.last_completed_task = task_name
+    user.step_name = transition.next_step
+    user.task_name = transition.next_task
 
     if transition.mark_status:
         user.status = transition.mark_status
@@ -294,7 +294,7 @@ def build_user_flow_data(
         anchor_task = user.last_completed_task
         failed_task = user.last_completed_task if user.status == Status.REJECTED else None
     else:
-        anchor_task = user.current_task
+        anchor_task = user.task_name
         failed_task = None
 
     # Calculate current_task_number (1-based)
