@@ -2,7 +2,8 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.openapi.utils import get_openapi
-from fastapi.responses import JSONResponse
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.responses import HTMLResponse, JSONResponse
 
 # Router import
 from app.api.routes import router as api_router
@@ -225,7 +226,7 @@ Returns the candidate's current status and progress at any point in the flow.
 </details>
 """,
     version="1.0.0",
-    docs_url="/docs",   # Swagger UI
+    docs_url=None,      # Disabled — served via custom endpoint below
     redoc_url="/redoc", # ReDoc UI
     lifespan=lifespan   # Attaching the new lifespan context manager
 )
@@ -463,3 +464,26 @@ def _build_dynamic_openapi() -> dict:
 
 
 app.openapi = _build_dynamic_openapi
+
+
+# =============================================================================
+# CUSTOM SWAGGER UI — HIDE TITLE & OPENAPI URL
+# =============================================================================
+_SWAGGER_CUSTOM_CSS = """
+<style>
+  /* Hide the default OpenAPI title (keep the emoji h1 in the description) */
+  .swagger-ui .info .title { display: none !important; }
+  /* Hide the /openapi.json URL link */
+  .swagger-ui .info .url   { display: none !important; }
+</style>
+"""
+
+@app.get("/docs", include_in_schema=False)
+async def custom_swagger_ui() -> HTMLResponse:
+    """Serves Swagger UI (light mode) with title and OpenAPI URL hidden."""
+    html = get_swagger_ui_html(
+        openapi_url="/openapi.json",
+        title="Masterschool Admissions Engine — API Docs",
+    )
+    patched = html.body.decode().replace("</head>", f"{_SWAGGER_CUSTOM_CSS}</head>", 1)
+    return HTMLResponse(patched)
