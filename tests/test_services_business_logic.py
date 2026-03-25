@@ -18,6 +18,14 @@ from app.services.admissions import (
     ConfigurationError
 )
 
+# Spec-compliant payloads for real flow config tasks
+_PD_PAYLOAD = {"first_name": "Test", "last_name": "User", "email": "test@example.com", "timestamp": 1700000000}
+_IQ_PASS_PAYLOAD = {"score": 100, "test_id": "test-001", "timestamp": 1700000000}
+_IQ_MEDIUM_PAYLOAD = {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
+_SCHEDULE_PAYLOAD = {"interview_date": "2025-01-01"}
+_INTERVIEW_PASS_PAYLOAD = {"decision": "passed_interview", "interview_date": "2025-01-01", "interviewer_id": "int-001"}
+_INTERVIEW_FAIL_PAYLOAD = {"decision": "failed_interview", "interview_date": "2025-01-01", "interviewer_id": "int-001"}
+
 
 # BUSINESS LOGIC TESTS (Production flow_config.json)
 
@@ -49,7 +57,7 @@ def test_second_chance_iq_pass_advances_to_interview(
     # Act — Complete personal_details (AUTO_PASS)
     user = process_task_completion(
         user_id=user.id, current_step="personal_details", current_task="submit_personal_details",
-        payload={}, repo=mock_repo, flow=real_flow_config
+        payload=_PD_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert — Now on IQ test
@@ -59,7 +67,7 @@ def test_second_chance_iq_pass_advances_to_interview(
     # Act — Submit medium IQ score (triggers injection)
     user = process_task_completion(
         user_id=user.id, current_step="iq_test", current_task="perform_iq_test",
-        payload={"score": 65}, repo=mock_repo, flow=real_flow_config
+        payload=_IQ_MEDIUM_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert — Second chance injected
@@ -97,13 +105,13 @@ def test_second_chance_iq_fail_rejects_user(
     user = create_new_user(email="fail.second@test.com", repo=mock_repo, flow=real_flow_config)
     user = process_task_completion(
         user_id=user.id, current_step="personal_details", current_task="submit_personal_details",
-        payload={}, repo=mock_repo, flow=real_flow_config
+        payload=_PD_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Act — Medium score triggers second chance
     user = process_task_completion(
         user_id=user.id, current_step="iq_test", current_task="perform_iq_test",
-        payload={"score": 65}, repo=mock_repo, flow=real_flow_config
+        payload=_IQ_MEDIUM_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
     assert user.current_task == "second_chance_iq"
 
@@ -124,8 +132,8 @@ def test_interview_rejection_on_wrong_decision(
     """
     [Layer B] Validates that a non-passing interview decision results in rejection.
 
-    The perform_interview task requires decision='pass' to advance.
-    Submitting decision='fail' triggers the explicit rejection rule,
+    The perform_interview task requires decision='passed_interview' to advance.
+    Submitting decision='failed_interview' triggers the explicit rejection rule,
     resulting in REJECTED status.
 
     Args:
@@ -133,31 +141,31 @@ def test_interview_rejection_on_wrong_decision(
         real_flow_config (FlowConfig): The production FSM configuration.
 
     Expected Behavior:
-        Submitting decision='fail' causes REJECTED status.
+        Submitting decision='failed_interview' causes REJECTED status.
     """
     # Arrange — Create user and advance to perform_interview
     user = create_new_user(email="interview.fail@test.com", repo=mock_repo, flow=real_flow_config)
     user = process_task_completion(
         user_id=user.id, current_step="personal_details", current_task="submit_personal_details",
-        payload={}, repo=mock_repo, flow=real_flow_config
+        payload=_PD_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
     user = process_task_completion(
         user_id=user.id, current_step="iq_test", current_task="perform_iq_test",
-        payload={"score": 100}, repo=mock_repo, flow=real_flow_config
+        payload=_IQ_PASS_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
     assert user.current_step == "interview"
     assert user.current_task == "schedule_interview"
 
     user = process_task_completion(
         user_id=user.id, current_step="interview", current_task="schedule_interview",
-        payload={}, repo=mock_repo, flow=real_flow_config
+        payload=_SCHEDULE_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
     assert user.current_task == "perform_interview"
 
     # Act — Submit failing interview decision
     user = process_task_completion(
         user_id=user.id, current_step="interview", current_task="perform_interview",
-        payload={"decision": "fail"}, repo=mock_repo, flow=real_flow_config
+        payload=_INTERVIEW_FAIL_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert

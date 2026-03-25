@@ -23,9 +23,9 @@ def test_iq_test_high_score_advances_to_interview():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
-        "task_payload": {"score": 100}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
+        "task_payload": {"score": 100, "test_id": "test-001", "timestamp": 1700000000}
     })
 
     # Assert
@@ -53,9 +53,9 @@ def test_iq_test_medium_score_injects_second_chance():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
-        "task_payload": {"score": 65}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
+        "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
 
     # Assert
@@ -83,9 +83,9 @@ def test_iq_test_low_score_causes_rejection():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
-        "task_payload": {"score": 30}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
+        "task_payload": {"score": 30, "test_id": "test-001", "timestamp": 1700000000}
     })
 
     # Assert
@@ -112,9 +112,9 @@ def test_second_chance_iq_high_score_advances_to_interview():
     # Act — Trigger second chance injection
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
-        "task_payload": {"score": 65}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
+        "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
     assert response.status_code == 200
     user_data = response.json()
@@ -123,8 +123,8 @@ def test_second_chance_iq_high_score_advances_to_interview():
     # Act — Pass the second chance
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "second_chance_iq",
+        "step_name": user_data["current_step"],
+        "task_name": "second_chance_iq",
         "task_payload": {"score": 100}
     })
 
@@ -151,9 +151,9 @@ def test_second_chance_iq_fail_causes_rejection():
     # Act — Trigger second chance injection
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
-        "task_payload": {"score": 65}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
+        "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
     assert response.status_code == 200
     user_data = response.json()
@@ -162,8 +162,8 @@ def test_second_chance_iq_fail_causes_rejection():
     # Act — Fail the second chance
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "second_chance_iq",
+        "step_name": user_data["current_step"],
+        "task_name": "second_chance_iq",
         "task_payload": {"score": 30}
     })
 
@@ -176,7 +176,7 @@ def test_interview_pass_decision_advances_to_sign_contract():
     """
     [Layer B] Validates that a passing interview decision advances to sign_contract.
 
-    Submitting decision='pass' on perform_interview should
+    Submitting decision='passed_interview' on perform_interview should
     advance the user to sign_contract/upload_identification_document.
 
     Expected Behavior:
@@ -190,9 +190,13 @@ def test_interview_pass_decision_advances_to_sign_contract():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_interview",
-        "task_payload": {"decision": "pass"}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_interview",
+        "task_payload": {
+            "decision": "passed_interview",
+            "interview_date": "2025-01-01",
+            "interviewer_id": "int-001",
+        }
     })
 
     # Assert
@@ -205,11 +209,11 @@ def test_interview_fail_decision_causes_rejection():
     """
     [Layer B] Validates that a failing interview decision causes rejection.
 
-    Submitting decision='fail' triggers the explicit rejection rule,
+    Submitting decision='failed_interview' triggers the explicit rejection rule,
     resulting in REJECTED status.
 
     Expected Behavior:
-        User is REJECTED after submitting decision='fail'.
+        User is REJECTED after submitting decision='failed_interview'.
     """
     # Arrange
     initial_user = client.post("/api/v1/users", json={"email": "interview.fail@test.com"}).json()
@@ -219,9 +223,13 @@ def test_interview_fail_decision_causes_rejection():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_interview",
-        "task_payload": {"decision": "fail"}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_interview",
+        "task_payload": {
+            "decision": "failed_interview",
+            "interview_date": "2025-01-01",
+            "interviewer_id": "int-001",
+        }
     })
 
     # Assert
@@ -273,8 +281,8 @@ def test_iq_test_missing_score_returns_422():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
         "task_payload": {}
     })
 
@@ -299,8 +307,8 @@ def test_iq_test_wrong_type_score_returns_422():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
         "task_payload": {"score": "eighty"}
     })
 
@@ -311,10 +319,10 @@ def test_iq_test_wrong_type_score_returns_422():
 
 def test_valid_payload_passes_validation():
     """
-    [Layer B] Validates that a correctly-typed payload is not rejected — regression guard.
+    [Layer B] Validates that a correctly-typed, complete payload is not rejected — regression guard.
 
     Expected Behavior:
-        PUT /tasks/complete with task_payload={"score": 90} returns HTTP 200.
+        PUT /tasks/complete with all required fields for perform_iq_test returns HTTP 200.
     """
     # Arrange
     initial = client.post("/api/v1/users", json={"email": "validation.valid@test.com"}).json()
@@ -324,9 +332,9 @@ def test_valid_payload_passes_validation():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": "perform_iq_test",
-        "task_payload": {"score": 90}
+        "step_name": user_data["current_step"],
+        "task_name": "perform_iq_test",
+        "task_payload": {"score": 90, "test_id": "test-001", "timestamp": 1700000000}
     })
 
     # Assert

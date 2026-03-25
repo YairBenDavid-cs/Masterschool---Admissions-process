@@ -1,7 +1,15 @@
 """Tests for the underlying FSM system, routing, and agnostic flow mechanics."""
 
 import pytest
-from tests.utils_api import client, get_flow_blueprint, find_injection_task, get_multi_task_step, navigate_to_step, navigate_to_task
+from tests.utils_api import (
+    client,
+    get_flow_blueprint,
+    find_injection_task,
+    get_multi_task_step,
+    navigate_to_step,
+    navigate_to_task,
+    DEFAULT_TASK_PAYLOADS,
+)
 
 
 
@@ -136,9 +144,9 @@ def test_multi_task_step_persistence():
 
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_data["user_id"],
-        "current_step": target_step,
-        "current_task": first_task,
-        "task_payload": {"interview_date": "2026-05-01"}
+        "step_name": target_step,
+        "task_name": first_task,
+        "task_payload": DEFAULT_TASK_PAYLOADS.get(first_task, {})
     })
 
     # Assert
@@ -167,12 +175,12 @@ def test_dynamic_task_injection_edge_case():
     initial_user = client.post("/api/v1/users", json={"email": "edge.case@test.com"}).json()
     user_data = navigate_to_step(initial_user["user_id"], step_name, initial_user)
 
-    # Act
+    # Act — score of 65 triggers injection (medium band: 60-75)
     payload = {
         "user_id": user_data["user_id"],
-        "current_step": step_name,
-        "current_task": task_name,
-        "task_payload": {"score": 65}
+        "step_name": step_name,
+        "task_name": task_name,
+        "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
 
@@ -205,8 +213,8 @@ def test_terminal_state_lock():
     # Act
     payload = {
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": user_data["current_task"],
+        "step_name": user_data["current_step"],
+        "task_name": user_data["current_task"],
         "task_payload": {}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
@@ -230,8 +238,8 @@ def test_error_task_mismatch():
     # Act
     payload = {
         "user_id": user_id,
-        "current_step": "hacked_step",
-        "current_task": "hacked_task",
+        "step_name": "hacked_step",
+        "task_name": "hacked_task",
         "task_payload": {}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
@@ -278,17 +286,20 @@ def test_complete_flow_following_api_instructions():
     user_data = response.json()
     user_id = user_data["user_id"]
 
-    # Act
+    # Act — follow current_task from the API response, using spec-compliant payloads
     max_iterations = 20
     for _ in range(max_iterations):
         if user_data["status"] in ["ACCEPTED", "REJECTED"]:
             break
 
+        current_task = user_data["current_task"]
+        task_payload = DEFAULT_TASK_PAYLOADS.get(current_task, {})
+
         payload = {
             "user_id": user_id,
-            "current_step": user_data["current_step"],
-            "current_task": user_data["current_task"],
-            "task_payload": {"score": 100, "decision": "pass"}
+            "step_name": user_data["current_step"],
+            "task_name": current_task,
+            "task_payload": task_payload,
         }
         res = client.put("/api/v1/tasks/complete", json=payload)
         assert res.status_code == 200, f"Failed at step: {user_data['current_step']}"
@@ -469,9 +480,9 @@ def test_get_user_flow_second_chance_injected_correctly():
     user_data = navigate_to_task(user_id, injection_task, initial_user)
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": injection_task,
-        "task_payload": {"score": 65}
+        "step_name": user_data["current_step"],
+        "task_name": injection_task,
+        "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
     assert res.status_code == 200
 
@@ -485,7 +496,6 @@ def test_get_user_flow_second_chance_injected_correctly():
 
     task_ids = [t["task_id"] for t in data["tasks"]]
     injection_pos = task_ids.index(injection_task)
-    injected_task_id = data["custom_flow"] if "custom_flow" in data else None
 
     # The injected task must appear immediately after the trigger task
     injected_items = [t for t in data["tasks"] if t["is_injected"] is True]
@@ -516,9 +526,9 @@ def test_get_user_flow_second_chance_task_is_current():
     user_data = navigate_to_task(user_id, injection_task, initial_user)
     client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": injection_task,
-        "task_payload": {"score": 65}
+        "step_name": user_data["current_step"],
+        "task_name": injection_task,
+        "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
 
     # Act
@@ -586,9 +596,9 @@ def test_get_user_flow_rejected_states_split_correctly():
     user_data = navigate_to_task(user_id, injection_task, initial_user)
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "current_step": user_data["current_step"],
-        "current_task": injection_task,
-        "task_payload": {"score": 30}  # Below threshold → REJECTED
+        "step_name": user_data["current_step"],
+        "task_name": injection_task,
+        "task_payload": {"score": 30, "test_id": "test-001", "timestamp": 1700000000}
     })
     assert res.status_code == 200
     assert res.json()["status"] == "REJECTED"
