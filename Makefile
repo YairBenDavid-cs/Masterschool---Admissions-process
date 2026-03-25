@@ -23,7 +23,7 @@ run:
 
 # Stop and remove the running container(s).
 stop:
-	docker-compose down
+	docker-compose down --remove-orphans
 
 
 # Run the candidate portal Streamlit app in a temporary container.
