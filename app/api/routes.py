@@ -263,8 +263,8 @@ def complete_task(
     try:
         user = process_task_completion(
             user_id=str(request.user_id),
-            current_step=request.current_step,
-            current_task=request.current_task,
+            current_step=request.step_name,
+            current_task=request.task_name,
             payload=request.task_payload,
             repo=repo,
             flow=flow

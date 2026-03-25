@@ -44,16 +44,16 @@ class TaskCompleteRequest(BaseModel):
         json_schema_extra={
             "example": {
                 "user_id": "paste-your-user-id-from-step-1-here",
-                "current_step": "personal_details",
-                "current_task": "submit_personal_details",
+                "step_name": "personal_details",
+                "task_name": "submit_personal_details",
                 "task_payload": {}
             }
         }
     )
 
     user_id: UUID = Field(..., description="The unique identifier of the user (must be a valid UUID v4).")
-    current_step: str = Field(..., description="The step the task belongs to — must match the user's current step.")
-    current_task: str = Field(..., description="The specific task being completed — must match the user's current task.")
+    step_name: str = Field(..., description="The step the task belongs to — must match the user's current step.")
+    task_name: str = Field(..., description="The specific task being completed — must match the user's current task.")
     task_payload: Dict[str, Any] = Field(
         default_factory=dict,
         description=(
