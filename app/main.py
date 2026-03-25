@@ -276,22 +276,34 @@ def _build_dynamic_openapi() -> dict:
                 "tasks_map": example_tasks_map,
             }
 
-        # --- UserFlowResponse: realistic mid-flow snapshot ---
+        # --- UserFlowResponse: realistic rejection snapshot ---
         if "UserFlowResponse" in schemas:
             default_tasks = [task for step in flow.default_steps for task in step.tasks]
-            states = ["COMPLETED", "COMPLETED", "CURRENT", "PENDING", "PENDING"]
+            task_to_step = {
+                task_id: step.name
+                for step in flow.default_steps
+                for task_id in step.tasks
+            }
+            states = ["COMPLETED", "COMPLETED", "FAILED", "PENDING", "PENDING"]
             flow_tasks_example = [
                 {
                     "task_id": task_id,
+                    "step_name": task_to_step.get(task_id, "unknown"),
                     "state": states[i] if i < len(states) else "PENDING",
                     "is_injected": False,
                 }
                 for i, task_id in enumerate(default_tasks[:5])
             ]
+            failed_task_id = default_tasks[2] if len(default_tasks) > 2 else "unknown"
             schemas["UserFlowResponse"]["example"] = {
                 "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-                "status": "IN_PROGRESS",
+                "status": "REJECTED",
                 "total_tasks": len(default_tasks),
+                "current_task_number": 3,
+                "outcome": {
+                    "failed_at_task": failed_task_id,
+                    "reason": f"Application rejected at task: {failed_task_id}",
+                },
                 "tasks": flow_tasks_example,
             }
 
