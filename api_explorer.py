@@ -20,6 +20,7 @@ import sys
 from typing import Optional
 
 import httpx
+import questionary
 
 BASE_URL  = "http://localhost:8000"
 SEPARATOR = "=" * 66
@@ -110,32 +111,29 @@ def _suggest(current_user_id: Optional[str], last_response: Optional[dict]) -> s
     return "4"
 
 
-def print_menu(current_user_id: Optional[str], last_response: Optional[dict]) -> None:
-    short_id  = current_user_id[:8] + "..." if current_user_id else "None"
+def build_menu_choices(
+    current_user_id: Optional[str],
+    last_response: Optional[dict],
+) -> tuple[list, str]:
+    """Build questionary Choice objects for the arrow-key select menu."""
     suggested = _suggest(current_user_id, last_response)
 
-    print(f"\n  {SEPARATOR}")
-    print(f"    {_BOLD}API EXPLORER{_RESET}  │  Stored user_id: {short_id}  │  Server: :8000")
-    print(f"  {SEPARATOR}\n")
+    rows = [
+        ("1", "POST", "/api/v1/users",              "Register a New Candidate"),
+        ("2", "GET",  "/api/v1/flow",               "Full FSM Flow Blueprint"),
+        ("3", "GET",  "/api/v1/users/{id}/flow",    "Candidate's Personalized Flow"),
+        ("4", "GET",  "/api/v1/users/{id}/current", "Current Step & Task"),
+        ("5", "PUT",  "/api/v1/tasks/complete",     "Complete a Task & Advance the FSM"),
+        ("6", "GET",  "/api/v1/users/{id}/status",  "Admission Status"),
+        ("0", "",     "",                           "Exit"),
+    ]
 
-    def _row(num: str, method: str, path: str, label: str) -> None:
-        arrow = "→" if num == suggested else " "
-        if num == suggested:
-            tag  = f"{_GREEN}{_BOLD}[{num}]{arrow}{_RESET}"
-            rest = f"{_GREEN}{_BOLD}{method:<5}  {path:<40}  {label}{_RESET}"
-        else:
-            tag  = f"[{num}] "
-            rest = f"{method:<5}  {path:<40}  {label}"
-        print(f"  {tag} {rest}")
-
-    _row("1", "POST",  "/api/v1/users",                "Register a New Candidate")
-    _row("2", "GET",   "/api/v1/flow",                 "Full FSM Flow Blueprint")
-    _row("3", "GET",   "/api/v1/users/{id}/flow",      "Candidate's Personalized Flow")
-    _row("4", "GET",   "/api/v1/users/{id}/current",   "Current Step & Task")
-    _row("5", "PUT",   "/api/v1/tasks/complete",       "Complete a Task & Advance the FSM")
-    _row("6", "GET",   "/api/v1/users/{id}/status",    "Admission Status")
-    _row("0", "",      "",                             "Exit")
-    print()
+    choices = []
+    for num, method, path, label in rows:
+        arrow = " →" if num == suggested else "   "
+        title = f"[{num}]{arrow}  {method:<5}  {path:<40}  {label}"
+        choices.append(questionary.Choice(title=title, value=num))
+    return choices, suggested
 
 
 # =============================================================================
@@ -339,10 +337,19 @@ def run() -> None:
 
     with httpx.Client(base_url=BASE_URL) as client:
         while True:
-            print_menu(current_user_id, last_response)
-            choice = input("  Choose [0-6]: ").strip()
+            short_id = current_user_id[:8] + "..." if current_user_id else "None"
+            print(f"\n  {SEPARATOR}")
+            print(f"    {_BOLD}API EXPLORER{_RESET}  │  Stored user_id: {short_id}  │  Server: :8000")
+            print(f"  {SEPARATOR}")
 
-            if choice == "0":
+            choices, suggested = build_menu_choices(current_user_id, last_response)
+            choice = questionary.select(
+                "  Select an action:",
+                choices=choices,
+                default=suggested,
+            ).ask()
+
+            if choice is None or choice == "0":
                 print("\n  Goodbye.\n")
                 break
 
@@ -368,9 +375,6 @@ def run() -> None:
 
             elif choice == "6":
                 action_get_status(client, current_user_id)
-
-            else:
-                print("  ✗  Invalid choice. Enter a number from 0 to 6.")
 
 
 if __name__ == "__main__":
