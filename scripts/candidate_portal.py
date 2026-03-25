@@ -11,6 +11,7 @@ Requirements:
 """
 
 import datetime
+import os
 import time
 from typing import Optional
 
@@ -21,7 +22,7 @@ import streamlit as st
 # CONFIGURATION
 # =============================================================================
 
-API_BASE = "http://localhost:8000"
+API_BASE = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 STEP_DISPLAY_NAMES: dict[str, str] = {
     "personal_details": "Personal Details",

@@ -16,13 +16,14 @@ Requirements:
 """
 
 import json
+import os
 import sys
 from typing import Optional
 
 import httpx
 import questionary
 
-BASE_URL  = "http://localhost:8000"
+BASE_URL  = os.environ.get("API_URL", "http://localhost:8000")
 SEPARATOR = "=" * 66
 
 # ANSI colors

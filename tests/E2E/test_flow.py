@@ -11,9 +11,7 @@ import uuid
 import pytest
 from tests.helpers.utils_api import client, navigate_to_step, navigate_to_task
 
-pytestmark = pytest.mark.e2e
-
-
+pytestmark = pytest.mark.E2E
 class TestHappyPath:
     def test_full_flow_ends_in_accepted(self):
         """
