@@ -5,6 +5,7 @@ FastAPI route definitions for the Admissions Engine REST API.
 # Third-Party
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict, Any
+from uuid import UUID
 
 # Local Application — Domain & Config
 from app.models.domain import User
@@ -41,41 +42,19 @@ from app.services.admissions import (
 from app.core.config import get_flow_config
 from app.repository.in_memory import get_repo, UserRepository
 
+# Local Application — OpenAPI error response documentation
+from app.api.docs_responses import (
+    POST_USERS_400,
+    POST_USERS_422,
+    PUT_TASKS_COMPLETE_400,
+    PUT_TASKS_COMPLETE_404,
+    PUT_TASKS_COMPLETE_422,
+    PUT_TASKS_COMPLETE_500,
+    USER_LOOKUP_404,
+    DEFAULT_VALIDATION_422,
+)
+
 router = APIRouter(prefix="/api/v1", tags=["Admissions Flow"])
-
-# =============================================================================
-# SHARED ERROR RESPONSE DOCUMENTATION
-# =============================================================================
-
-_404_response = {
-    "description": "User not found",
-    "content": {"application/json": {"example": {"detail": "User with ID abc-123 not found."}}}
-}
-_400_response = {
-    "description": "Bad Request — email already registered, terminal state, or task mismatch",
-    "content": {"application/json": {"example": {"detail": "User abc-123 is already in a terminal state: REJECTED"}}}
-}
-_422_response = {
-    "description": "Unprocessable Entity — payload contract violation (missing or wrong-type field)",
-    "content": {
-        "application/json": {
-            "examples": {
-                "missing_field": {
-                    "summary": "Required field missing",
-                    "value": {"detail": "Task 'perform_iq_test' requires field 'score' (type: int) but it was not provided."}
-                },
-                "wrong_type": {
-                    "summary": "Wrong field type",
-                    "value": {"detail": "Task 'perform_iq_test': field 'score' must be 'int', got 'str'."}
-                }
-            }
-        }
-    }
-}
-_500_response = {
-    "description": "Internal Server Error — FSM configuration error",
-    "content": {"application/json": {"example": {"detail": "Decision engine failure."}}}
-}
 
 
 # =============================================================================
@@ -87,7 +66,7 @@ _500_response = {
     summary="Register a New Candidate",
     response_model=UserStatusResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={400: _400_response}
+    responses={400: POST_USERS_400, 422: POST_USERS_422}
 )
 def register_user(
     request: UserCreateRequest,
@@ -122,7 +101,7 @@ def register_user(
 
 
 # =============================================================================
-# 2. GET - Retrieve the entire flow
+# 2A. GET - Retrieve the entire flow
 # =============================================================================
 
 @router.get(
@@ -151,153 +130,8 @@ def get_flow(flow: FlowConfig = Depends(get_flow_config)) -> FlowDefinitionRespo
         tasks_map=flow.tasks_map
     )
 
-
 # =============================================================================
-# 3. GET - Fetch the current step and task for a specific user
-# =============================================================================
-
-@router.get(
-    "/users/{user_id}/current",
-    summary="Get Candidate's Current Step & Task",
-    response_model=Dict[str, str],
-    status_code=status.HTTP_200_OK,
-    responses={404: _404_response}
-)
-def get_user_current_step_and_task(
-    user_id: str,
-    repo: UserRepository = Depends(get_repo)
-) -> Dict[str, str]:
-    """
-    Returns only the current step and task for a specific user.
-
-    A lightweight endpoint optimized for polling scenarios where the
-    client only needs to know the user's position in the workflow,
-    without the full enriched response payload.
-
-    Args:
-        user_id (str): The unique identifier of the user (path parameter).
-        repo (UserRepository): The injected persistence layer dependency.
-
-    Returns:
-        Dict[str, str]: A dictionary containing 'current_step' and
-            'current_task' keys.
-
-    Raises:
-        HTTPException: 404 Not Found if the user ID does not exist.
-    """
-    try:
-        user = get_user_record(user_id=user_id, repo=repo)
-        return {
-            "current_step": user.current_step,
-            "current_task": user.current_task
-        }
-    except UserNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-
-
-# =============================================================================
-# 4. PUT - Mark a task as completed
-# =============================================================================
-
-@router.put(
-    "/tasks/complete",
-    summary="Complete a Task & Advance the FSM",
-    response_model=UserStatusResponse,
-    status_code=status.HTTP_200_OK,
-    responses={400: _400_response, 404: _404_response, 422: _422_response, 500: _500_response}
-)
-def complete_task(
-    request: TaskCompleteRequest,
-    repo: UserRepository = Depends(get_repo),
-    flow: FlowConfig = Depends(get_flow_config)
-) -> UserStatusResponse:
-    """
-    Orchestrates the completion of a task through the service layer.
-
-    Delegates to the admissions service to validate the submission,
-    evaluate FSM transitions via the engine, and apply state changes.
-    Translates domain-specific exceptions into appropriate HTTP responses.
-
-    Args:
-        request (TaskCompleteRequest): The incoming payload containing
-            user_id, current_step, current_task, and task_payload.
-        repo (UserRepository): The injected persistence layer dependency.
-        flow (FlowConfig): The injected FSM configuration dependency.
-
-    Returns:
-        UserStatusResponse: The updated user state after task completion,
-            enriched with progress info and HATEOAS navigation links.
-
-    Raises:
-        HTTPException: 404 if the user is not found, 400 for workflow
-            state or task mismatch errors, 500 for configuration errors.
-    """
-    try:
-        user = process_task_completion(
-            user_id=request.user_id,
-            current_step=request.current_step,
-            current_task=request.current_task,
-            payload=request.task_payload,
-            repo=repo,
-            flow=flow
-        )
-        return _build_user_response(user, flow)
-    except UserNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    except PayloadValidationError as exc:
-        # Contract violation (422) - payload doesn't match the task's declared schema
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except (WorkflowStateError, TaskMismatchError) as exc:
-        # Client errors (400)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    except ConfigurationError as exc:
-        # Server errors (500) - e.g., missing task in JSON
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
-
-
-# =============================================================================
-# 5. GET - Check whether a user is accepted, rejected, or still in progress
-# =============================================================================
-
-@router.get(
-    "/users/{user_id}/status",
-    summary="Get Candidate's Admission Status",
-    response_model=Dict[str, str],
-    status_code=status.HTTP_200_OK,
-    responses={404: _404_response}
-)
-def get_user_status(
-    user_id: str,
-    repo: UserRepository = Depends(get_repo)
-) -> Dict[str, str]:
-    """
-    Returns only the overarching admission status for a specific user.
-
-    A lightweight endpoint that returns the user's high-level status
-    (IN_PROGRESS, ACCEPTED, or REJECTED) without step or task details,
-    optimized for dashboard polling and status badge rendering.
-
-    Args:
-        user_id (str): The unique identifier of the user (path parameter).
-        repo (UserRepository): The injected persistence layer dependency.
-
-    Returns:
-        Dict[str, str]: A dictionary containing a single 'status' key.
-
-    Raises:
-        HTTPException: 404 Not Found if the user ID does not exist.
-    """
-    try:
-        user = get_user_record(user_id=user_id, repo=repo)
-        return {
-            "status": user.status.value if hasattr(user.status, 'value') else user.status
-        }
-    except UserNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-
-
-# =============================================================================
-# 6. GET - Retrieve the personalized flow for a specific user
+# 2B. GET - Retrieve the personalized flow for a specific user
 # =============================================================================
 
 @router.get(
@@ -305,10 +139,10 @@ def get_user_status(
     summary="Get Candidate's Personalized Flow",
     response_model=UserFlowResponse,
     status_code=status.HTTP_200_OK,
-    responses={404: _404_response}
+    responses={404: USER_LOOKUP_404, 422: DEFAULT_VALIDATION_422}
 )
 def get_user_personalized_flow(
-    user_id: str,
+    user_id: UUID,
     repo: UserRepository = Depends(get_repo),
     flow: FlowConfig = Depends(get_flow_config)
 ) -> UserFlowResponse:
@@ -320,7 +154,7 @@ def get_user_personalized_flow(
     COMPLETED, CURRENT, or PENDING based on the user's current FSM position.
 
     Args:
-        user_id (str): The unique identifier of the user (path parameter).
+        user_id (UUID): The unique identifier of the user (path parameter, validated as UUID v4).
         repo (UserRepository): The injected persistence layer dependency.
         flow (FlowConfig): The injected FSM configuration dependency.
 
@@ -331,7 +165,7 @@ def get_user_personalized_flow(
         HTTPException: 404 Not Found if the user ID does not exist.
     """
     try:
-        user, task_sequence = get_user_flow(user_id, repo, flow)
+        user, task_sequence = get_user_flow(str(user_id), repo, flow)
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
@@ -364,6 +198,153 @@ def get_user_personalized_flow(
         total_tasks=len(task_sequence),
         tasks=tasks
     )
+
+
+# =============================================================================
+# 3. GET - Fetch the current step and task for a specific user
+# =============================================================================
+
+@router.get(
+    "/users/{user_id}/current",
+    summary="Get Candidate's Current Step & Task",
+    response_model=Dict[str, str],
+    status_code=status.HTTP_200_OK,
+    responses={404: USER_LOOKUP_404, 422: DEFAULT_VALIDATION_422}
+)
+def get_user_current_step_and_task(
+    user_id: UUID,
+    repo: UserRepository = Depends(get_repo)
+) -> Dict[str, str]:
+    """
+    Returns only the current step and task for a specific user.
+
+    A lightweight endpoint optimized for polling scenarios where the
+    client only needs to know the user's position in the workflow,
+    without the full enriched response payload.
+
+    Args:
+        user_id (UUID): The unique identifier of the user (path parameter, validated as UUID v4).
+        repo (UserRepository): The injected persistence layer dependency.
+
+    Returns:
+        Dict[str, str]: A dictionary containing 'current_step' and
+            'current_task' keys.
+
+    Raises:
+        HTTPException: 404 Not Found if the user ID does not exist.
+    """
+    try:
+        user = get_user_record(user_id=str(user_id), repo=repo)
+        return {
+            "current_step": user.current_step,
+            "current_task": user.current_task
+        }
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+# =============================================================================
+# 4. PUT - Mark a task as completed
+# =============================================================================
+
+@router.put(
+    "/tasks/complete",
+    summary="Complete a Task & Advance the FSM",
+    response_model=UserStatusResponse,
+    status_code=status.HTTP_200_OK,
+    responses={400: PUT_TASKS_COMPLETE_400, 404: PUT_TASKS_COMPLETE_404, 422: PUT_TASKS_COMPLETE_422, 500: PUT_TASKS_COMPLETE_500}
+)
+def complete_task(
+    request: TaskCompleteRequest,
+    repo: UserRepository = Depends(get_repo),
+    flow: FlowConfig = Depends(get_flow_config)
+) -> UserStatusResponse:
+    """
+    Orchestrates the completion of a task through the service layer.
+
+    Delegates to the admissions service to validate the submission,
+    evaluate FSM transitions via the engine, and apply state changes.
+    Translates domain-specific exceptions into appropriate HTTP responses.
+
+    Args:
+        request (TaskCompleteRequest): The incoming payload containing
+            user_id, current_step, current_task, and task_payload.
+        repo (UserRepository): The injected persistence layer dependency.
+        flow (FlowConfig): The injected FSM configuration dependency.
+
+    Returns:
+        UserStatusResponse: The updated user state after task completion,
+            enriched with progress info and HATEOAS navigation links.
+
+    Raises:
+        HTTPException: 404 if the user is not found, 400 for workflow
+            state or task mismatch errors, 500 for configuration errors.
+    """
+    try:
+        user = process_task_completion(
+            user_id=str(request.user_id),
+            current_step=request.current_step,
+            current_task=request.current_task,
+            payload=request.task_payload,
+            repo=repo,
+            flow=flow
+        )
+        return _build_user_response(user, flow)
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except PayloadValidationError as exc:
+        # Contract violation (422) - payload doesn't match the task's declared schema
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    except (WorkflowStateError, TaskMismatchError) as exc:
+        # Client errors (400)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except ConfigurationError as exc:
+        # Server errors (500) - e.g., missing task in JSON
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
+
+
+# =============================================================================
+# 5. GET - Check whether a user is accepted, rejected, or still in progress
+# =============================================================================
+
+@router.get(
+    "/users/{user_id}/status",
+    summary="Get Candidate's Admission Status",
+    response_model=Dict[str, str],
+    status_code=status.HTTP_200_OK,
+    responses={404: USER_LOOKUP_404, 422: DEFAULT_VALIDATION_422}
+)
+def get_user_status(
+    user_id: UUID,
+    repo: UserRepository = Depends(get_repo)
+) -> Dict[str, str]:
+    """
+    Returns only the overarching admission status for a specific user.
+
+    A lightweight endpoint that returns the user's high-level status
+    (IN_PROGRESS, ACCEPTED, or REJECTED) without step or task details,
+    optimized for dashboard polling and status badge rendering.
+
+    Args:
+        user_id (UUID): The unique identifier of the user (path parameter, validated as UUID v4).
+        repo (UserRepository): The injected persistence layer dependency.
+
+    Returns:
+        Dict[str, str]: A dictionary containing a single 'status' key.
+
+    Raises:
+        HTTPException: 404 Not Found if the user ID does not exist.
+    """
+    try:
+        user = get_user_record(user_id=str(user_id), repo=repo)
+        return {
+            "status": user.status.value if hasattr(user.status, 'value') else user.status
+        }
+    except UserNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+
+
+
 
 
 # =============================================================================

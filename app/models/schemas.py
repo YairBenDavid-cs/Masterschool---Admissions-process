@@ -4,6 +4,7 @@ Request and response DTOs (Data Transfer Objects) for the Admissions Engine API.
 
 from enum import Enum
 from typing import Dict, Any, List, Optional
+from uuid import UUID
 from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 # Importing Enums and Blueprints for strict typing and Swagger documentation
@@ -50,7 +51,7 @@ class TaskCompleteRequest(BaseModel):
         }
     )
 
-    user_id: str = Field(..., description="The unique identifier of the user.")
+    user_id: UUID = Field(..., description="The unique identifier of the user (must be a valid UUID v4).")
     current_step: str = Field(..., description="The step the task belongs to — must match the user's current step.")
     current_task: str = Field(..., description="The specific task being completed — must match the user's current task.")
     task_payload: Dict[str, Any] = Field(

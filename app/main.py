@@ -136,6 +136,25 @@ def health_check() -> dict[str, str]:
 # DYNAMIC OPENAPI / SWAGGER OVERRIDE
 # =============================================================================
 
+def _patch_path_example(paths: dict, path: str, method: str, example: dict) -> None:
+    """Injects a 200 response body example directly at the path operation level.
+
+    Used for endpoints that return Dict[str, str] — these have no named schema in
+    components/schemas, so the example must be written to the paths object instead.
+    """
+    target = (
+        paths
+        .get(path, {})
+        .get(method, {})
+        .get("responses", {})
+        .get("200", {})
+        .get("content", {})
+        .get("application/json")
+    )
+    if target is not None:
+        target["example"] = example
+
+
 def _build_dynamic_openapi() -> dict:
     """
     Generates the OpenAPI schema with examples derived from flow_config.json.
@@ -224,6 +243,68 @@ def _build_dynamic_openapi() -> dict:
                 },
                 "current_task_schema": schema_example_fields
             }
+
+        # --- FlowDefinitionResponse: built from live config (first 3 tasks for brevity) ---
+        if "FlowDefinitionResponse" in schemas:
+            example_steps = [
+                {"name": step.name, "display_name": step.display_name, "tasks": step.tasks}
+                for step in flow.default_steps
+            ]
+            example_tasks_map = {
+                task_id: {
+                    "name": bp.name,
+                    "pass_condition_type": bp.pass_condition_type.value,
+                    "payload_schema": [
+                        {
+                            "key_name": f.key_name,
+                            "value_type": f.value_type,
+                            "required": f.required,
+                            "description": f.description,
+                            "example": f.example,
+                        }
+                        for f in bp.payload_schema
+                    ],
+                    "transitions": [
+                        {"condition": t.condition, "next_step": t.next_step, "next_task": t.next_task}
+                        for t in bp.transitions[:1]
+                    ],
+                }
+                for task_id, bp in list(flow.tasks_map.items())[:3]
+            }
+            schemas["FlowDefinitionResponse"]["example"] = {
+                "steps": example_steps,
+                "tasks_map": example_tasks_map,
+            }
+
+        # --- UserFlowResponse: realistic mid-flow snapshot ---
+        if "UserFlowResponse" in schemas:
+            default_tasks = [task for step in flow.default_steps for task in step.tasks]
+            states = ["COMPLETED", "COMPLETED", "CURRENT", "PENDING", "PENDING"]
+            flow_tasks_example = [
+                {
+                    "task_id": task_id,
+                    "state": states[i] if i < len(states) else "PENDING",
+                    "is_injected": False,
+                }
+                for i, task_id in enumerate(default_tasks[:5])
+            ]
+            schemas["UserFlowResponse"]["example"] = {
+                "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "status": "IN_PROGRESS",
+                "total_tasks": len(default_tasks),
+                "tasks": flow_tasks_example,
+            }
+
+        # --- Dict-typed GET endpoints: patch path-level response examples ---
+        paths = schema.get("paths", {})
+        _patch_path_example(
+            paths, "/api/v1/users/{user_id}/current", "get",
+            {"current_step": task_step_name, "current_task": example_task.name},
+        )
+        _patch_path_example(
+            paths, "/api/v1/users/{user_id}/status", "get",
+            {"status": "IN_PROGRESS"},
+        )
 
     app.openapi_schema = schema
     return app.openapi_schema

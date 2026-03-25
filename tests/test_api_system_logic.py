@@ -249,8 +249,8 @@ def test_error_user_not_found():
         The API returns 404 Not Found for any invalid or non-existent
         user UUID.
     """
-    # Arrange
-    non_existent_user_id = "non-existent-uuid"
+    # Arrange — valid UUID format, but no such user exists in the DB
+    non_existent_user_id = "00000000-0000-0000-0000-000000000000"
 
     # Act
     response = client.get(f"/api/v1/users/{non_existent_user_id}/status")
@@ -375,7 +375,8 @@ def test_get_user_flow_not_found_returns_404():
     Expected Behavior:
         A request for a non-existent user_id returns HTTP 404.
     """
-    response = client.get("/api/v1/users/non-existent-id/flow")
+    # Use a valid UUID format that doesn't exist in the DB
+    response = client.get("/api/v1/users/00000000-0000-0000-0000-000000000000/flow")
     assert response.status_code == 404
 
 
