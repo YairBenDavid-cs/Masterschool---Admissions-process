@@ -70,11 +70,12 @@ def put_complete_task(
     task_name: str,
     task_payload: dict,
 ) -> httpx.Response:
+    stamped_payload = {**task_payload, "timestamp": int(time.time())}
     return get_client().put("/api/v1/tasks/complete", json={
         "user_id":      user_id,
         "step_name":    step_name,
         "task_name":    task_name,
-        "task_payload": task_payload,
+        "task_payload": stamped_payload,
     })
 
 
@@ -101,7 +102,7 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
         tier_name = choice.split(" (")[0]
         score   = dict(IQ_TIERS)[tier_name]
         if st.button("Submit IQ Test", use_container_width=True, type="primary"):
-            return {"score": score, "test_id": "test-001", "timestamp": int(time.time())}
+            return {"score": score, "test_id": "test-001"}
         return None
 
     # --- Specific task: Second-chance IQ ---
@@ -113,7 +114,7 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
         tier_name = choice.split(" (")[0]
         score   = dict(IQ_TIERS)[tier_name]
         if st.button("Submit Second Attempt", use_container_width=True, type="primary"):
-            return {"score": score, "test_id": "test-002", "timestamp": int(time.time())}
+            return {"score": score, "test_id": "test-002"}
         return None
 
     # --- Specific task: Schedule Interview ---
@@ -126,7 +127,7 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
             min_value=datetime.date.today(),
         )
         if st.button("Confirm Date →", use_container_width=True, type="primary"):
-            return {"interview_date": interview_date.isoformat(), "timestamp": int(time.time())}
+            return {"interview_date": interview_date.isoformat()}
         return None
 
     # --- Specific task: Interview ---
@@ -150,7 +151,6 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
                 "decision": decision,
                 "interviewer_id": interviewer_id,
                 "interview_date": interview_date.isoformat(),
-                "timestamp": int(time.time()),
             }
         return None
 
@@ -166,6 +166,8 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
     st.markdown("#### Complete This Task")
     form_values: dict = {}
     for field in schema:
+        if field.get("key_name") == "timestamp":
+            continue  # auto-injected by put_complete_task — never shown to user
         key   = field["key_name"]
         vtype = field.get("value_type", "str")
         desc  = field.get("description", key)
@@ -272,7 +274,7 @@ def flow_page() -> None:
             "user_id": user_id,
             "step_name": step_name,
             "task_name": task_name,
-            "task_payload": payload,
+            "task_payload": {**payload, "timestamp": int(time.time())},
         }
         with st.spinner("Processing..."):
             resp = put_complete_task(user_id, step_name, task_name, payload)
