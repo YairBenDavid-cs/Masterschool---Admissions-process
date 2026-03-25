@@ -57,32 +57,172 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Masterschool Admissions Engine",
     description="""
-A **Data-Driven Finite State Machine** API for the Masterschool candidate enrollment process.
+<div align="center">
 
-All flow logic lives in `flow_config.json`. The Python engine is 100% domain-agnostic and fully PM-configurable without code changes.
+# 🎓 Masterschool Admissions Engine
 
----
+**A production-grade, Metadata-Driven Finite State Machine API**
+Built on a 100% domain-agnostic engine — all flow logic lives in `flow_config.json`.
+No code changes needed when a PM updates the funnel. Full **HATEOAS** compliance built-in.
 
-## Quick Start Guide
-
-Follow these steps in order to run a complete admissions flow directly from this UI:
-
-### Step 1 — Register a Candidate
-**`POST /api/v1/users`** — Click **Try it out**, then **Execute**.
-The email is pre-filled and ready to go.
-Copy the `user_id` from the response body.
-
-### Step 2 — Advance Through the Flow
-**`PUT /api/v1/tasks/complete`** — Click **Try it out**, paste your `user_id` into the request body, and click **Execute**.
-The `current_step` and `current_task` are pre-filled with the first step of the flow.
-Each response returns the **next** `current_step` and `current_task` — update the body and repeat until `status` is `ACCEPTED` or `REJECTED`.
-
-### Step 3 — Poll the Outcome at Any Time
-**`GET /api/v1/users/{user_id}/status`** — Paste your `user_id` to check the candidate's final admission decision.
+</div>
 
 ---
 
-**Full Flow:** `Personal Details → IQ Test → Interview → Sign Contract → Payment → Join Slack → ACCEPTED`
+## ⚡ Quick Start — Run a Full Flow in 3 Steps
+
+> All examples are pre-filled. Just copy your `user_id` between steps.
+
+### Step 1 · Register a Candidate 🆕
+**`POST /api/v1/users`** → click **Try it out** → **Execute**
+The email is pre-filled. Copy the `user_id` from the response.
+
+### Step 2 · Advance Through the Flow 🔄
+**`PUT /api/v1/tasks/complete`** → paste your `user_id` → **Execute**
+Each response returns the **next** `current_step` and `current_task` via `_links`.
+Repeat until `status` is `ACCEPTED` or `REJECTED`.
+
+### Step 3 · Check the Final Decision ✅
+**`GET /api/v1/users/{user_id}/status`** → paste your `user_id`
+Returns the candidate's current status and progress at any point in the flow.
+
+---
+
+## 🗺️ Admissions Funnel
+
+| # | Step | Task | Type |
+|---|------|------|------|
+| 1 | Personal Details | `submit_personal_details` | Auto-pass |
+| 2 | IQ Test | `perform_iq_test` | Evaluated payload |
+| ↳ | *(if score < 70)* | `second_chance_iq` | Injected · Evaluated payload |
+| 3 | Interview | `schedule_interview` | Auto-pass |
+| 4 | Interview | `perform_interview` | Evaluated payload |
+| 5 | Sign Contract | `upload_identification_document` | Auto-pass |
+| 6 | Sign Contract | `sign_contract_task` | Auto-pass |
+| 7 | Payment | `process_payment` | Auto-pass |
+| 8 | Join Slack | `join_slack_task` | Auto-pass → **ACCEPTED** |
+
+---
+
+<details>
+<summary>🛠️ Copy-Paste Payload Cheat Sheet</summary>
+
+### 1 · `submit_personal_details` — Personal Details *(Auto-pass)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "personal_details",
+  "current_task": "submit_personal_details",
+  "task_payload": {}
+}
+```
+
+---
+
+### 2 · `perform_iq_test` — IQ Test *(Evaluated)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "iq_test",
+  "current_task": "perform_iq_test",
+  "task_payload": {
+    "score": 85
+  }
+}
+```
+> 💡 Score **≥ 70** to pass. Use `40` to trigger the second-chance path.
+
+---
+
+### 3 · `second_chance_iq` — Second-Chance IQ *(Injected · Evaluated)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "iq_test",
+  "current_task": "second_chance_iq",
+  "task_payload": {
+    "score": 80
+  }
+}
+```
+> 💡 Only appears if `perform_iq_test` score was below threshold. Same scoring rules apply.
+
+---
+
+### 4 · `schedule_interview` — Schedule Interview *(Auto-pass)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "interview",
+  "current_task": "schedule_interview",
+  "task_payload": {}
+}
+```
+
+---
+
+### 5 · `perform_interview` — Interview Decision *(Evaluated)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "interview",
+  "current_task": "perform_interview",
+  "task_payload": {
+    "decision": "pass"
+  }
+}
+```
+> 💡 Allowed values: `"pass"` · `"fail"`
+
+---
+
+### 6 · `upload_identification_document` — Upload ID *(Auto-pass)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "sign_contract",
+  "current_task": "upload_identification_document",
+  "task_payload": {}
+}
+```
+
+---
+
+### 7 · `sign_contract_task` — Sign Contract *(Auto-pass)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "sign_contract",
+  "current_task": "sign_contract_task",
+  "task_payload": {}
+}
+```
+
+---
+
+### 8 · `process_payment` — Payment *(Auto-pass)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "payment",
+  "current_task": "process_payment",
+  "task_payload": {}
+}
+```
+
+---
+
+### 9 · `join_slack_task` — Join Slack *(Auto-pass → ACCEPTED)*
+```json
+{
+  "user_id": "<your-user-id>",
+  "current_step": "join_slack",
+  "current_task": "join_slack_task",
+  "task_payload": {}
+}
+```
+
+</details>
 """,
     version="1.0.0",
     docs_url="/docs",   # Swagger UI
