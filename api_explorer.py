@@ -143,16 +143,14 @@ def print_menu(current_user_id: Optional[str], last_response: Optional[dict]) ->
 # =============================================================================
 
 def resolve_user_id(stored_id: Optional[str]) -> Optional[str]:
-    """Return a user_id to use — stored or freshly typed. Returns None on empty with no stored."""
+    """Return the stored user_id silently, or prompt once if none is stored."""
     if stored_id:
-        raw = input(f"  Press Enter to use '{stored_id[:8]}...' or type a different ID: ").strip()
-        return raw if raw else stored_id
-    else:
-        raw = input("  Enter user_id: ").strip()
-        if not raw:
-            print("  ✗  user_id is required.")
-            return None
-        return raw
+        return stored_id
+    raw = input("  Enter user_id: ").strip()
+    if not raw:
+        print("  ✗  user_id is required.")
+        return None
+    return raw
 
 
 # =============================================================================
