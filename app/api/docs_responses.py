@@ -116,7 +116,7 @@ PUT_TASKS_COMPLETE_422 = {
                 "allowed_values_violation": {
                     "summary": "Value not in allowed list",
                     "value": {
-                        "detail": "Task 'perform_interview': field 'decision' must be one of ['pass', 'fail'], got 'passed_interview'."
+                        "detail": "Task 'perform_interview': field 'decision' must be one of ['passed_interview', 'failed_interview'], got 'wrong_value'."
                     }
                 },
                 "invalid_uuid_body": {

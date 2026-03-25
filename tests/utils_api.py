@@ -5,6 +5,27 @@ from app.main import app
 
 client = TestClient(app)
 
+# Full spec-compliant default passing payloads for every task.
+# Used by navigation helpers so tests don't need to provide complete payloads manually.
+DEFAULT_TASK_PAYLOADS: dict[str, dict] = {
+    "submit_personal_details": {
+        "first_name": "Test", "last_name": "User",
+        "email": "test@example.com", "timestamp": 1700000000,
+    },
+    "perform_iq_test": {"score": 100, "test_id": "test-001", "timestamp": 1700000000},
+    "second_chance_iq": {"score": 100},
+    "schedule_interview": {"interview_date": "2025-01-01"},
+    "perform_interview": {
+        "decision": "passed_interview",
+        "interview_date": "2025-01-01",
+        "interviewer_id": "int-001",
+    },
+    "upload_identification_document": {"passport_number": "AB123456", "timestamp": 1700000000},
+    "sign_contract_task": {"timestamp": 1700000000},
+    "process_payment": {"payment_id": "pay-001", "timestamp": 1700000000},
+    "join_slack_task": {"email": "test@example.com", "timestamp": 1700000000},
+}
+
 
 def get_flow_blueprint() -> dict:
     """
@@ -96,14 +117,13 @@ def navigate_to_step(
 
         current_task = user_data["current_task"]
 
-        # Flex: Use custom payload if provided, otherwise fallback to generic passing values
-        default_payload = {"score": 100, "decision": "pass"}
-        task_payload = custom_payloads.get(current_task, default_payload)
+        # Use custom payload if provided, otherwise fall back to spec-compliant defaults
+        task_payload = custom_payloads.get(current_task, DEFAULT_TASK_PAYLOADS.get(current_task, {}))
 
         payload = {
             "user_id": user_id,
-            "current_step": user_data["current_step"],
-            "current_task": current_task,
+            "step_name": user_data["current_step"],
+            "task_name": current_task,
             "task_payload": task_payload
         }
 
@@ -150,13 +170,13 @@ def navigate_to_task(
 
         current_task = user_data["current_task"]
 
-        default_payload = {"score": 100, "decision": "pass"}
-        task_payload = custom_payloads.get(current_task, default_payload)
+        # Use custom payload if provided, otherwise fall back to spec-compliant defaults
+        task_payload = custom_payloads.get(current_task, DEFAULT_TASK_PAYLOADS.get(current_task, {}))
 
         payload = {
             "user_id": user_id,
-            "current_step": user_data["current_step"],
-            "current_task": current_task,
+            "step_name": user_data["current_step"],
+            "task_name": current_task,
             "task_payload": task_payload
         }
 
