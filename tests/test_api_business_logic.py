@@ -23,7 +23,7 @@ def test_iq_test_high_score_advances_to_interview():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": 100, "test_id": "test-001", "timestamp": 1700000000}
     })
@@ -31,8 +31,8 @@ def test_iq_test_high_score_advances_to_interview():
     # Assert
     assert response.status_code == 200
     data = response.json()
-    assert data["current_step"] == "interview"
-    assert data["current_task"] == "schedule_interview"
+    assert data["step_name"] == "interview"
+    assert data["task_name"] == "schedule_interview"
     assert len(data["custom_flow"]) == 0
 
 def test_iq_test_medium_score_injects_second_chance():
@@ -53,7 +53,7 @@ def test_iq_test_medium_score_injects_second_chance():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
@@ -61,8 +61,8 @@ def test_iq_test_medium_score_injects_second_chance():
     # Assert
     assert response.status_code == 200
     data = response.json()
-    assert data["current_step"] == "iq_test"
-    assert data["current_task"] == "second_chance_iq"
+    assert data["step_name"] == "iq_test"
+    assert data["task_name"] == "second_chance_iq"
     assert "second_chance_iq" in data["custom_flow"]
 
 def test_iq_test_low_score_causes_rejection():
@@ -83,7 +83,7 @@ def test_iq_test_low_score_causes_rejection():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": 30, "test_id": "test-001", "timestamp": 1700000000}
     })
@@ -112,18 +112,18 @@ def test_second_chance_iq_high_score_advances_to_interview():
     # Act — Trigger second chance injection
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
     assert response.status_code == 200
     user_data = response.json()
-    assert user_data["current_task"] == "second_chance_iq"
+    assert user_data["task_name"] == "second_chance_iq"
 
     # Act — Pass the second chance
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "second_chance_iq",
         "task_payload": {"score": 100}
     })
@@ -131,7 +131,7 @@ def test_second_chance_iq_high_score_advances_to_interview():
     # Assert
     assert response.status_code == 200
     data = response.json()
-    assert data["current_step"] == "interview"
+    assert data["step_name"] == "interview"
 
 def test_second_chance_iq_fail_causes_rejection():
     """
@@ -151,18 +151,18 @@ def test_second_chance_iq_fail_causes_rejection():
     # Act — Trigger second chance injection
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
     assert response.status_code == 200
     user_data = response.json()
-    assert user_data["current_task"] == "second_chance_iq"
+    assert user_data["task_name"] == "second_chance_iq"
 
     # Act — Fail the second chance
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "second_chance_iq",
         "task_payload": {"score": 30}
     })
@@ -190,7 +190,7 @@ def test_interview_pass_decision_advances_to_sign_contract():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_interview",
         "task_payload": {
             "decision": "passed_interview",
@@ -202,8 +202,8 @@ def test_interview_pass_decision_advances_to_sign_contract():
     # Assert
     assert response.status_code == 200
     data = response.json()
-    assert data["current_step"] == "sign_contract"
-    assert data["current_task"] == "upload_identification_document"
+    assert data["step_name"] == "sign_contract"
+    assert data["task_name"] == "upload_identification_document"
 
 def test_interview_fail_decision_causes_rejection():
     """
@@ -223,7 +223,7 @@ def test_interview_fail_decision_causes_rejection():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_interview",
         "task_payload": {
             "decision": "failed_interview",
@@ -281,7 +281,7 @@ def test_iq_test_missing_score_returns_422():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {}
     })
@@ -307,7 +307,7 @@ def test_iq_test_wrong_type_score_returns_422():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": "eighty"}
     })
@@ -332,7 +332,7 @@ def test_valid_payload_passes_validation():
     # Act
     response = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": "perform_iq_test",
         "task_payload": {"score": 90, "test_id": "test-001", "timestamp": 1700000000}
     })
@@ -455,12 +455,12 @@ def test_current_task_schema_matches_flow_blueprint():
     initial = client.post("/api/v1/users", json={"email": "jit.consistency@test.com"}).json()
     user_id = initial["user_id"]
     user_data = navigate_to_task(user_id, "perform_iq_test", initial)
-    current_task = user_data["current_task"]
+    task_name = user_data["task_name"]
 
     # Act
     jit_schema = user_data["current_task_schema"]
     blueprint = get_flow_blueprint()
-    blueprint_schema = blueprint["tasks_map"][current_task].get("payload_schema", [])
+    blueprint_schema = blueprint["tasks_map"][task_name].get("payload_schema", [])
 
     # Assert — both paths must return identical schema
     assert jit_schema == blueprint_schema

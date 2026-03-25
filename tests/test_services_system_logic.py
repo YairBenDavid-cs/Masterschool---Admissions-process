@@ -47,8 +47,8 @@ def test_create_new_user_success(mock_repo: InMemoryUserRepository, mock_flow_co
     # Assert
     assert user.email == email
     assert user.status == Status.IN_PROGRESS
-    assert user.current_step == "step_start"
-    assert user.current_task == "task_auto_pass"
+    assert user.step_name == "step_start"
+    assert user.task_name == "task_auto_pass"
 
 def test_create_new_user_duplicate_email(mock_repo: InMemoryUserRepository, mock_flow_config: FlowConfig) -> None:
     """
@@ -130,8 +130,8 @@ def test_process_task_completion_mismatch(mock_repo: InMemoryUserRepository, moc
     with pytest.raises(TaskMismatchError):
         process_task_completion(
             user_id=user.id,
-            current_step="wrong_step",
-            current_task="wrong_task",
+            step_name="wrong_step",
+            task_name="wrong_task",
             payload={},
             repo=mock_repo,
             flow=mock_flow_config
@@ -158,8 +158,8 @@ def test_process_task_completion_already_terminal(mock_repo: InMemoryUserReposit
     with pytest.raises(WorkflowStateError):
         process_task_completion(
             user_id=user.id,
-            current_step=user.current_step,
-            current_task=user.current_task,
+            step_name=user.step_name,
+            task_name=user.task_name,
             payload={},
             repo=mock_repo,
             flow=mock_flow_config
@@ -185,8 +185,8 @@ def test_process_task_completion_configuration_error(mock_repo: InMemoryUserRepo
     with pytest.raises(ConfigurationError):
         process_task_completion(
             user_id=user.id,
-            current_step="step_start",
-            current_task="task_auto_pass",
+            step_name="step_start",
+            task_name="task_auto_pass",
             payload={},
             repo=mock_repo,
             flow=mock_flow_config
@@ -214,23 +214,23 @@ def test_process_task_completion_standard_flow(mock_repo: InMemoryUserRepository
 
     # Act — Complete Step 1 (AUTO_PASS)
     updated_user = process_task_completion(
-        user_id=user.id, current_step="step_start", current_task="task_auto_pass",
+        user_id=user.id, step_name="step_start", task_name="task_auto_pass",
         payload={}, repo=mock_repo, flow=mock_flow_config
     )
 
     # Assert — Step 1
-    assert updated_user.current_step == "step_evaluation"
-    assert updated_user.current_task == "task_eval"
+    assert updated_user.step_name == "step_evaluation"
+    assert updated_user.task_name == "task_eval"
 
     # Act — Complete Step 2 (High Score)
     final_user = process_task_completion(
-        user_id=updated_user.id, current_step="step_evaluation", current_task="task_eval",
+        user_id=updated_user.id, step_name="step_evaluation", task_name="task_eval",
         payload={"score": 90}, repo=mock_repo, flow=mock_flow_config
     )
 
     # Assert — Step 2
-    assert final_user.current_step == "step_final"
-    assert final_user.current_task == "task_final"
+    assert final_user.step_name == "step_final"
+    assert final_user.task_name == "task_final"
     assert final_user.status == Status.IN_PROGRESS
     assert len(final_user.custom_flow) == 0  # No injection occurred
 
@@ -250,22 +250,22 @@ def test_process_task_completion_dynamic_injection(mock_repo: InMemoryUserReposi
     """
     # Arrange
     user = create_new_user(email="edge@case.com", repo=mock_repo, flow=mock_flow_config)
-    user.current_step = "step_evaluation"
-    user.current_task = "task_eval"
+    user.step_name = "step_evaluation"
+    user.task_name = "task_eval"
     mock_repo.save_user(user)
 
     # Act — Submit a payload that triggers the injection rule (score: 60)
     updated_user = process_task_completion(
         user_id=user.id,
-        current_step="step_evaluation",
-        current_task="task_eval",
+        step_name="step_evaluation",
+        task_name="task_eval",
         payload={"score": 60},
         repo=mock_repo,
         flow=mock_flow_config
     )
 
     # Assert
-    assert updated_user.current_task == "task_injected_extra"
+    assert updated_user.task_name == "task_injected_extra"
     assert "task_injected_extra" in updated_user.custom_flow
     assert updated_user.status == Status.IN_PROGRESS
 
@@ -284,15 +284,15 @@ def test_process_task_completion_terminal_rejection(mock_repo: InMemoryUserRepos
     """
     # Arrange
     user = create_new_user(email="fail@test.com", repo=mock_repo, flow=mock_flow_config)
-    user.current_step = "step_evaluation"
-    user.current_task = "task_eval"
+    user.step_name = "step_evaluation"
+    user.task_name = "task_eval"
     mock_repo.save_user(user)
 
     # Act — Submit a failing score to trigger the DEFAULT rule
     final_user = process_task_completion(
         user_id=user.id,
-        current_step="step_evaluation",
-        current_task="task_eval",
+        step_name="step_evaluation",
+        task_name="task_eval",
         payload={"score": 10},
         repo=mock_repo,
         flow=mock_flow_config
@@ -300,7 +300,7 @@ def test_process_task_completion_terminal_rejection(mock_repo: InMemoryUserRepos
 
     # Assert
     assert final_user.status == Status.REJECTED
-    assert final_user.current_step == "TERMINAL_REJECTED"
+    assert final_user.step_name == "TERMINAL_REJECTED"
 
 # =============================================================================
 # 4. NEW GUARD CLAUSE & EDGE CASE TESTS
@@ -347,8 +347,8 @@ def test_update_custom_flow_idempotent() -> None:
     user = User(
         id="idempotent-user",
         email="idempotent@test.com",
-        current_step="step_eval",
-        current_task="task_eval",
+        step_name="step_eval",
+        task_name="task_eval",
         status=Status.IN_PROGRESS,
         custom_flow=[]
     )
@@ -385,23 +385,23 @@ def test_process_task_completion_extra_payload_fields(mock_repo: InMemoryUserRep
     """
     # Arrange
     user = create_new_user(email="extra@fields.com", repo=mock_repo, flow=mock_flow_config)
-    user.current_step = "step_evaluation"
-    user.current_task = "task_eval"
+    user.step_name = "step_evaluation"
+    user.task_name = "task_eval"
     mock_repo.save_user(user)
 
     # Act
     updated_user = process_task_completion(
         user_id=user.id,
-        current_step="step_evaluation",
-        current_task="task_eval",
+        step_name="step_evaluation",
+        task_name="task_eval",
         payload={"score": 90, "foo": "bar", "irrelevant": 999},
         repo=mock_repo,
         flow=mock_flow_config
     )
 
     # Assert
-    assert updated_user.current_step == "step_final"
-    assert updated_user.current_task == "task_final"
+    assert updated_user.step_name == "step_final"
+    assert updated_user.task_name == "task_final"
 
 def test_engine_is_completely_agnostic_to_domain() -> None:
     """
@@ -458,18 +458,18 @@ def test_engine_is_completely_agnostic_to_domain() -> None:
 
     # Act — Scenario 1: Pineapple pizza (should be rejected)
     pineapple_user = create_new_user(email="pineapple@pizza.com", repo=pizza_repo, flow=pizza_flow)
-    assert pineapple_user.current_step == "dough_step"
-    assert pineapple_user.current_task == "prepare_dough"
+    assert pineapple_user.step_name == "dough_step"
+    assert pineapple_user.task_name == "prepare_dough"
 
     pineapple_user = process_task_completion(
-        user_id=pineapple_user.id, current_step="dough_step", current_task="prepare_dough",
+        user_id=pineapple_user.id, step_name="dough_step", task_name="prepare_dough",
         payload={}, repo=pizza_repo, flow=pizza_flow
     )
-    assert pineapple_user.current_step == "toppings_step"
-    assert pineapple_user.current_task == "add_toppings"
+    assert pineapple_user.step_name == "toppings_step"
+    assert pineapple_user.task_name == "add_toppings"
 
     pineapple_user = process_task_completion(
-        user_id=pineapple_user.id, current_step="toppings_step", current_task="add_toppings",
+        user_id=pineapple_user.id, step_name="toppings_step", task_name="add_toppings",
         payload={"toppings": "pineapple"}, repo=pizza_repo, flow=pizza_flow
     )
 
@@ -479,11 +479,11 @@ def test_engine_is_completely_agnostic_to_domain() -> None:
     # Act — Scenario 2: Mushroom pizza (should be accepted)
     mushroom_user = create_new_user(email="mushroom@pizza.com", repo=pizza_repo, flow=pizza_flow)
     mushroom_user = process_task_completion(
-        user_id=mushroom_user.id, current_step="dough_step", current_task="prepare_dough",
+        user_id=mushroom_user.id, step_name="dough_step", task_name="prepare_dough",
         payload={}, repo=pizza_repo, flow=pizza_flow
     )
     mushroom_user = process_task_completion(
-        user_id=mushroom_user.id, current_step="toppings_step", current_task="add_toppings",
+        user_id=mushroom_user.id, step_name="toppings_step", task_name="add_toppings",
         payload={"toppings": "mushrooms"}, repo=pizza_repo, flow=pizza_flow
     )
 
@@ -562,8 +562,8 @@ def test_last_completed_task_set_after_task_completion(
 
     updated_user = process_task_completion(
         user_id=user.id,
-        current_step="step_start",
-        current_task="task_auto_pass",
+        step_name="step_start",
+        task_name="task_auto_pass",
         payload={},
         repo=mock_repo,
         flow=mock_flow_config

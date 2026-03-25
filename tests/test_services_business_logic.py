@@ -51,38 +51,38 @@ def test_second_chance_iq_pass_advances_to_interview(
     """
     # Arrange — Create user at starting position
     user = create_new_user(email="second.chance@test.com", repo=mock_repo, flow=real_flow_config)
-    assert user.current_step == "personal_details"
-    assert user.current_task == "submit_personal_details"
+    assert user.step_name == "personal_details"
+    assert user.task_name == "submit_personal_details"
 
     # Act — Complete personal_details (AUTO_PASS)
     user = process_task_completion(
-        user_id=user.id, current_step="personal_details", current_task="submit_personal_details",
+        user_id=user.id, step_name="personal_details", task_name="submit_personal_details",
         payload=_PD_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert — Now on IQ test
-    assert user.current_step == "iq_test"
-    assert user.current_task == "perform_iq_test"
+    assert user.step_name == "iq_test"
+    assert user.task_name == "perform_iq_test"
 
     # Act — Submit medium IQ score (triggers injection)
     user = process_task_completion(
-        user_id=user.id, current_step="iq_test", current_task="perform_iq_test",
+        user_id=user.id, step_name="iq_test", task_name="perform_iq_test",
         payload=_IQ_MEDIUM_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert — Second chance injected
-    assert user.current_task == "second_chance_iq"
+    assert user.task_name == "second_chance_iq"
     assert "second_chance_iq" in user.custom_flow
 
     # Act — Submit high score on second chance
     user = process_task_completion(
-        user_id=user.id, current_step="iq_test", current_task="second_chance_iq",
+        user_id=user.id, step_name="iq_test", task_name="second_chance_iq",
         payload={"score": 80}, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert — Advanced to interview
-    assert user.current_step == "interview"
-    assert user.current_task == "schedule_interview"
+    assert user.step_name == "interview"
+    assert user.task_name == "schedule_interview"
 
 def test_second_chance_iq_fail_rejects_user(
     mock_repo: InMemoryUserRepository,
@@ -104,26 +104,26 @@ def test_second_chance_iq_fail_rejects_user(
     # Arrange — Create user and advance to IQ test
     user = create_new_user(email="fail.second@test.com", repo=mock_repo, flow=real_flow_config)
     user = process_task_completion(
-        user_id=user.id, current_step="personal_details", current_task="submit_personal_details",
+        user_id=user.id, step_name="personal_details", task_name="submit_personal_details",
         payload=_PD_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 
     # Act — Medium score triggers second chance
     user = process_task_completion(
-        user_id=user.id, current_step="iq_test", current_task="perform_iq_test",
+        user_id=user.id, step_name="iq_test", task_name="perform_iq_test",
         payload=_IQ_MEDIUM_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
-    assert user.current_task == "second_chance_iq"
+    assert user.task_name == "second_chance_iq"
 
     # Act — Fail the second chance
     user = process_task_completion(
-        user_id=user.id, current_step="iq_test", current_task="second_chance_iq",
+        user_id=user.id, step_name="iq_test", task_name="second_chance_iq",
         payload={"score": 40}, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert
     assert user.status == Status.REJECTED
-    assert user.current_step == "TERMINAL_REJECTED"
+    assert user.step_name == "TERMINAL_REJECTED"
 
 def test_interview_rejection_on_wrong_decision(
     mock_repo: InMemoryUserRepository,
@@ -146,25 +146,25 @@ def test_interview_rejection_on_wrong_decision(
     # Arrange — Create user and advance to perform_interview
     user = create_new_user(email="interview.fail@test.com", repo=mock_repo, flow=real_flow_config)
     user = process_task_completion(
-        user_id=user.id, current_step="personal_details", current_task="submit_personal_details",
+        user_id=user.id, step_name="personal_details", task_name="submit_personal_details",
         payload=_PD_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
     user = process_task_completion(
-        user_id=user.id, current_step="iq_test", current_task="perform_iq_test",
+        user_id=user.id, step_name="iq_test", task_name="perform_iq_test",
         payload=_IQ_PASS_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
-    assert user.current_step == "interview"
-    assert user.current_task == "schedule_interview"
+    assert user.step_name == "interview"
+    assert user.task_name == "schedule_interview"
 
     user = process_task_completion(
-        user_id=user.id, current_step="interview", current_task="schedule_interview",
+        user_id=user.id, step_name="interview", task_name="schedule_interview",
         payload=_SCHEDULE_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
-    assert user.current_task == "perform_interview"
+    assert user.task_name == "perform_interview"
 
     # Act — Submit failing interview decision
     user = process_task_completion(
-        user_id=user.id, current_step="interview", current_task="perform_interview",
+        user_id=user.id, step_name="interview", task_name="perform_interview",
         payload=_INTERVIEW_FAIL_PAYLOAD, repo=mock_repo, flow=real_flow_config
     )
 

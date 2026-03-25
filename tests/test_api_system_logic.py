@@ -38,8 +38,8 @@ def test_create_user_and_discover_start():
     assert response.status_code == 201
     data = response.json()
     assert "user_id" in data
-    assert data["current_step"] == expected_first_step
-    assert data["current_task"] == expected_first_task
+    assert data["step_name"] == expected_first_step
+    assert data["task_name"] == expected_first_task
     assert "_links" in data
     assert "next_action" in data["_links"]
     assert data["_links"]["next_action"]["method"] == "PUT"
@@ -74,7 +74,7 @@ def test_get_user_current_step_and_task():
     ONLY the current step and task.
 
     Expected Behavior:
-        Response contains current_step and current_task but NOT status,
+        Response contains step_name and task_name but NOT status,
         proving endpoint isolation.
     """
     # Arrange
@@ -86,8 +86,8 @@ def test_get_user_current_step_and_task():
     # Assert
     assert response.status_code == 200
     data = response.json()
-    assert "current_step" in data
-    assert "current_task" in data
+    assert "step_name" in data
+    assert "task_name" in data
     assert "status" not in data  # Proving it is optimized/isolated
 
 def test_get_user_overarching_status():
@@ -96,7 +96,7 @@ def test_get_user_overarching_status():
     ONLY the overarching status (ACCEPTED, REJECTED, IN_PROGRESS).
 
     Expected Behavior:
-        Response contains status but NOT current_step, proving endpoint isolation.
+        Response contains status but NOT step_name, proving endpoint isolation.
     """
     # Arrange
     user_id = client.post("/api/v1/users", json={"email": "status@test.com"}).json()["user_id"]
@@ -108,7 +108,7 @@ def test_get_user_overarching_status():
     assert response.status_code == 200
     data = response.json()
     assert "status" in data
-    assert "current_step" not in data  # Proving it is optimized/isolated
+    assert "step_name" not in data  # Proving it is optimized/isolated
 
 
 # =============================================================================
@@ -117,12 +117,12 @@ def test_get_user_overarching_status():
 
 def test_multi_task_step_persistence():
     """
-    [Layer A] PUT /tasks/complete - Verifies that a user remains on the same 'current_step'
+    [Layer A] PUT /tasks/complete - Verifies that a user remains on the same 'step_name'
     if the step contains multiple tasks, until all tasks are completed.
 
     Expected Behavior:
         After completing the first task of a multi-task step, the user's
-        current_step remains unchanged while current_task advances.
+        step_name remains unchanged while task_name advances.
     """
     # Arrange
     blueprint = get_flow_blueprint()
@@ -139,8 +139,8 @@ def test_multi_task_step_persistence():
     user_data = navigate_to_step(initial_user["user_id"], target_step, initial_user)
 
     # Act
-    assert user_data["current_step"] == target_step
-    assert user_data["current_task"] == first_task
+    assert user_data["step_name"] == target_step
+    assert user_data["task_name"] == first_task
 
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_data["user_id"],
@@ -152,8 +152,8 @@ def test_multi_task_step_persistence():
     # Assert
     assert res.status_code == 200
     updated_data = res.json()
-    assert updated_data["current_step"] == target_step
-    assert updated_data["current_task"] == second_task
+    assert updated_data["step_name"] == target_step
+    assert updated_data["task_name"] == second_task
 
 def test_dynamic_task_injection_edge_case():
     """
@@ -162,7 +162,7 @@ def test_dynamic_task_injection_edge_case():
 
     Expected Behavior:
         After submitting a payload that triggers injection, the user's
-        custom_flow list contains the injected task and current_task
+        custom_flow list contains the injected task and task_name
         matches the injected task.
     """
     # Arrange
@@ -188,7 +188,7 @@ def test_dynamic_task_injection_edge_case():
     assert response.status_code == 200
     data = response.json()
     assert len(data["custom_flow"]) > 0
-    assert data["current_task"] in data["custom_flow"]
+    assert data["task_name"] in data["custom_flow"]
 
 
 # =============================================================================
@@ -213,8 +213,8 @@ def test_terminal_state_lock():
     # Act
     payload = {
         "user_id": user_id,
-        "step_name": user_data["current_step"],
-        "task_name": user_data["current_task"],
+        "step_name": user_data["step_name"],
+        "task_name": user_data["task_name"],
         "task_payload": {}
     }
     response = client.put("/api/v1/tasks/complete", json=payload)
@@ -273,7 +273,7 @@ def test_error_user_not_found():
 
 def test_complete_flow_following_api_instructions():
     """
-    [Layer A] End-to-End: This test simply 'follows' the current_task and current_step
+    [Layer A] End-to-End: This test simply 'follows' the task_name and step_name
     provided by the API until it reaches a terminal state, proving complete decoupling.
 
     Expected Behavior:
@@ -286,23 +286,23 @@ def test_complete_flow_following_api_instructions():
     user_data = response.json()
     user_id = user_data["user_id"]
 
-    # Act — follow current_task from the API response, using spec-compliant payloads
+    # Act — follow task_name from the API response, using spec-compliant payloads
     max_iterations = 20
     for _ in range(max_iterations):
         if user_data["status"] in ["ACCEPTED", "REJECTED"]:
             break
 
-        current_task = user_data["current_task"]
-        task_payload = DEFAULT_TASK_PAYLOADS.get(current_task, {})
+        task_name = user_data["task_name"]
+        task_payload = DEFAULT_TASK_PAYLOADS.get(task_name, {})
 
         payload = {
             "user_id": user_id,
-            "step_name": user_data["current_step"],
-            "task_name": current_task,
+            "step_name": user_data["step_name"],
+            "task_name": task_name,
             "task_payload": task_payload,
         }
         res = client.put("/api/v1/tasks/complete", json=payload)
-        assert res.status_code == 200, f"Failed at step: {user_data['current_step']}"
+        assert res.status_code == 200, f"Failed at step: {user_data['step_name']}"
         user_data = res.json()
 
     # Assert
@@ -480,7 +480,7 @@ def test_get_user_flow_second_chance_injected_correctly():
     user_data = navigate_to_task(user_id, injection_task, initial_user)
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": injection_task,
         "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
@@ -526,7 +526,7 @@ def test_get_user_flow_second_chance_task_is_current():
     user_data = navigate_to_task(user_id, injection_task, initial_user)
     client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": injection_task,
         "task_payload": {"score": 65, "test_id": "test-001", "timestamp": 1700000000}
     })
@@ -596,7 +596,7 @@ def test_get_user_flow_rejected_states_split_correctly():
     user_data = navigate_to_task(user_id, injection_task, initial_user)
     res = client.put("/api/v1/tasks/complete", json={
         "user_id": user_id,
-        "step_name": user_data["current_step"],
+        "step_name": user_data["step_name"],
         "task_name": injection_task,
         "task_payload": {"score": 30, "test_id": "test-001", "timestamp": 1700000000}
     })
