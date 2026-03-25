@@ -97,7 +97,7 @@ def navigate_to_step(
         current_task = user_data["current_task"]
 
         # Flex: Use custom payload if provided, otherwise fallback to generic passing values
-        default_payload = {"score": 100, "decision": "passed_interview"}
+        default_payload = {"score": 100, "decision": "pass"}
         task_payload = custom_payloads.get(current_task, default_payload)
 
         payload = {
@@ -150,7 +150,7 @@ def navigate_to_task(
 
         current_task = user_data["current_task"]
 
-        default_payload = {"score": 100, "decision": "passed_interview"}
+        default_payload = {"score": 100, "decision": "pass"}
         task_payload = custom_payloads.get(current_task, default_payload)
 
         payload = {

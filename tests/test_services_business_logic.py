@@ -124,16 +124,16 @@ def test_interview_rejection_on_wrong_decision(
     """
     [Layer B] Validates that a non-passing interview decision results in rejection.
 
-    The perform_interview task requires an exact string match of
-    'passed_interview' to advance. Any other decision value triggers the
-    DEFAULT rule, resulting in REJECTED status.
+    The perform_interview task requires decision='pass' to advance.
+    Submitting decision='fail' triggers the explicit rejection rule,
+    resulting in REJECTED status.
 
     Args:
         mock_repo (InMemoryUserRepository): An empty in-memory repository.
         real_flow_config (FlowConfig): The production FSM configuration.
 
     Expected Behavior:
-        Submitting decision='failed_interview' causes REJECTED status.
+        Submitting decision='fail' causes REJECTED status.
     """
     # Arrange — Create user and advance to perform_interview
     user = create_new_user(email="interview.fail@test.com", repo=mock_repo, flow=real_flow_config)
@@ -157,7 +157,7 @@ def test_interview_rejection_on_wrong_decision(
     # Act — Submit failing interview decision
     user = process_task_completion(
         user_id=user.id, current_step="interview", current_task="perform_interview",
-        payload={"decision": "failed_interview"}, repo=mock_repo, flow=real_flow_config
+        payload={"decision": "fail"}, repo=mock_repo, flow=real_flow_config
     )
 
     # Assert

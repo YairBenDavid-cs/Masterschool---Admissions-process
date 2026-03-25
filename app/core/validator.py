@@ -70,3 +70,13 @@ def validate_task_payload(payload: Dict[str, Any], task_blueprint: TaskBlueprint
                 )
                 logger.warning(msg)
                 raise PayloadValidationError(msg)
+
+        # 3. allowed_values check
+        if field_def.allowed_values is not None and field_def.key_name in payload:
+            if payload[field_def.key_name] not in field_def.allowed_values:
+                msg = (
+                    f"Task '{task_blueprint.name}': field '{field_def.key_name}' must be one of "
+                    f"{field_def.allowed_values}, got '{payload[field_def.key_name]}'."
+                )
+                logger.warning(msg)
+                raise PayloadValidationError(msg)

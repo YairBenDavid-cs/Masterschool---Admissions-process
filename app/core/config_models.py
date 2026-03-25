@@ -50,6 +50,10 @@ class FieldDefinition(BaseModel):
         default=None,
         description="A concrete example value for this field, used to populate Swagger UI examples dynamically."
     )
+    allowed_values: Optional[List[str]] = Field(
+        default=None,
+        description="If set, the submitted value must be one of these strings."
+    )
 
 
 class TransitionRule(BaseModel):

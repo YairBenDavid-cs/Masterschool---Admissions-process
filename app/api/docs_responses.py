@@ -113,6 +113,12 @@ PUT_TASKS_COMPLETE_422 = {
                         "detail": "Task 'perform_iq_test': field 'score' must be 'int', got 'str'."
                     }
                 },
+                "allowed_values_violation": {
+                    "summary": "Value not in allowed list",
+                    "value": {
+                        "detail": "Task 'perform_interview': field 'decision' must be one of ['pass', 'fail'], got 'passed_interview'."
+                    }
+                },
                 "invalid_uuid_body": {
                     "summary": "user_id is not a valid UUID",
                     "value": {

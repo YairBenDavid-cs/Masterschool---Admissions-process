@@ -176,7 +176,7 @@ def test_interview_pass_decision_advances_to_sign_contract():
     """
     [Layer B] Validates that a passing interview decision advances to sign_contract.
 
-    Submitting decision='passed_interview' on perform_interview should
+    Submitting decision='pass' on perform_interview should
     advance the user to sign_contract/upload_identification_document.
 
     Expected Behavior:
@@ -192,7 +192,7 @@ def test_interview_pass_decision_advances_to_sign_contract():
         "user_id": user_id,
         "current_step": user_data["current_step"],
         "current_task": "perform_interview",
-        "task_payload": {"decision": "passed_interview"}
+        "task_payload": {"decision": "pass"}
     })
 
     # Assert
@@ -205,11 +205,11 @@ def test_interview_fail_decision_causes_rejection():
     """
     [Layer B] Validates that a failing interview decision causes rejection.
 
-    Submitting any decision other than 'passed_interview' triggers the
-    DEFAULT rule, resulting in REJECTED status.
+    Submitting decision='fail' triggers the explicit rejection rule,
+    resulting in REJECTED status.
 
     Expected Behavior:
-        User is REJECTED after submitting decision='failed'.
+        User is REJECTED after submitting decision='fail'.
     """
     # Arrange
     initial_user = client.post("/api/v1/users", json={"email": "interview.fail@test.com"}).json()
@@ -221,7 +221,7 @@ def test_interview_fail_decision_causes_rejection():
         "user_id": user_id,
         "current_step": user_data["current_step"],
         "current_task": "perform_interview",
-        "task_payload": {"decision": "failed"}
+        "task_payload": {"decision": "fail"}
     })
 
     # Assert

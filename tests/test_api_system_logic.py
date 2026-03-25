@@ -288,7 +288,7 @@ def test_complete_flow_following_api_instructions():
             "user_id": user_id,
             "current_step": user_data["current_step"],
             "current_task": user_data["current_task"],
-            "task_payload": {"score": 100, "decision": "passed_interview"}
+            "task_payload": {"score": 100, "decision": "pass"}
         }
         res = client.put("/api/v1/tasks/complete", json=payload)
         assert res.status_code == 200, f"Failed at step: {user_data['current_step']}"
