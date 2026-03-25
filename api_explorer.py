@@ -276,8 +276,8 @@ def action_complete_task(
         task_payload = _prompt_json_payload()
     # else AUTO_PASS → task_payload stays {}
 
-    # 6. Allow override of current_task (current_step is used silently)
-    print(f"\n  current_task  (Enter for '{current_task}'): ", end="")
+    # 6. Allow override of task_name (step_name is used silently)
+    print(f"\n  task_name  (Enter for '{current_task}'): ", end="")
     override_task = input().strip()
     if override_task:
         current_task = override_task
@@ -286,8 +286,8 @@ def action_complete_task(
     url     = "/api/v1/tasks/complete"
     body    = {
         "user_id":      user_id,
-        "current_step": current_step,
-        "current_task": current_task,
+        "step_name":    current_step,
+        "task_name":    current_task,
         "task_payload": task_payload,
     }
     print_request("PUT", BASE_URL + url, body)

@@ -70,8 +70,8 @@ def put_complete_task(
 ) -> httpx.Response:
     return get_client().put("/api/v1/tasks/complete", json={
         "user_id":      user_id,
-        "current_step": current_step,
-        "current_task": current_task,
+        "step_name":    current_step,
+        "task_name":    current_task,
         "task_payload": task_payload,
     })
 
@@ -92,6 +92,7 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
 
     # --- Specific task: IQ Test ---
     if current_task == "perform_iq_test":
+        import time
         st.markdown("#### IQ Assessment")
         st.markdown("Select the range that best describes your result:")
         labels  = [f"{name} (score: {val})" for name, val in IQ_TIERS]
@@ -99,7 +100,7 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
         tier_name = choice.split(" (")[0]
         score   = dict(IQ_TIERS)[tier_name]
         if st.button("Submit IQ Test", use_container_width=True, type="primary"):
-            return {"score": score}
+            return {"score": score, "test_id": "test-001", "timestamp": int(time.time())}
         return None
 
     # --- Specific task: Second-chance IQ ---
@@ -116,6 +117,7 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
 
     # --- Specific task: Interview ---
     if current_task == "perform_interview":
+        import time
         st.markdown("#### Interview Outcome")
         st.markdown("Record the interviewer's final decision:")
         decision_label = st.radio(
@@ -124,9 +126,11 @@ def render_task_widget(current_task: str, schema: list) -> Optional[dict]:
             label_visibility="collapsed",
             horizontal=True,
         )
-        decision = "pass" if "Pass" in decision_label else "fail"
+        decision = "passed_interview" if "Pass" in decision_label else "failed_interview"
+        interviewer_id = st.text_input("Interviewer ID", value="int-001")
+        interview_date = st.text_input("Interview Date (YYYY-MM-DD)", value="2025-06-01")
         if st.button("Record Outcome", use_container_width=True, type="primary"):
-            return {"decision": decision}
+            return {"decision": decision, "interviewer_id": interviewer_id, "interview_date": interview_date}
         return None
 
     # --- AUTO-PASS tasks (empty schema) ---
