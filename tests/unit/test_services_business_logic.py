@@ -3,6 +3,8 @@
 import pytest
 from typing import Any, Dict
 
+pytestmark = pytest.mark.business
+
 from app.models.domain import User
 from app.repository.in_memory import InMemoryUserRepository
 from app.core.config_models import FlowConfig, StepBlueprint, TaskBlueprint, TransitionRule, Status, PassConditionType

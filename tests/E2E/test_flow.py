@@ -8,7 +8,10 @@ Test 2 — Second Chance IQ: verifies the FSM dynamically injects second_chance_
 
 import uuid
 
-from tests.utils_api import client, navigate_to_step, navigate_to_task
+import pytest
+from tests.helpers.utils_api import client, navigate_to_step, navigate_to_task
+
+pytestmark = pytest.mark.e2e
 
 
 class TestHappyPath:

@@ -1,7 +1,7 @@
 """Tests for the underlying FSM system, routing, and agnostic flow mechanics."""
 
 import pytest
-from tests.utils_api import (
+from tests.helpers.utils_api import (
     client,
     get_flow_blueprint,
     find_injection_task,
@@ -11,6 +11,7 @@ from tests.utils_api import (
     DEFAULT_TASK_PAYLOADS,
 )
 
+pytestmark = pytest.mark.system
 
 
 # =============================================================================

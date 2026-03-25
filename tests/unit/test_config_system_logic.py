@@ -5,6 +5,8 @@ import pytest
 from pathlib import Path
 from pydantic import ValidationError
 
+pytestmark = pytest.mark.system
+
 from app.core.config import load_flow_config, Settings
 from app.core.config_models import FlowConfig, PassConditionType
 

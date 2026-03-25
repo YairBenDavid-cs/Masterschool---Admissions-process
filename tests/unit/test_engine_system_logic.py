@@ -3,6 +3,8 @@
 import pytest
 from typing import Dict, Any
 
+pytestmark = pytest.mark.system
+
 from app.core.config_models import TaskBlueprint, TransitionRule, Status, PassConditionType
 from app.core.engine import evaluate_transition, EngineEvaluationError
 

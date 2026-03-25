@@ -1,7 +1,9 @@
 """Tests for the specific Masterschool domain requirements and business logic."""
 
 import pytest
-from tests.utils_api import client, navigate_to_step, navigate_to_task, get_flow_blueprint
+from tests.helpers.utils_api import client, navigate_to_step, navigate_to_task, get_flow_blueprint
+
+pytestmark = pytest.mark.business
 
 
 def test_iq_test_high_score_advances_to_interview():
