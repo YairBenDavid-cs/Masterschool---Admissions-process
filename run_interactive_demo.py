@@ -14,17 +14,33 @@ Requirements:
 """
 
 import sys
+import datetime
 import httpx
 
-BASE_URL = "http://localhost:8000"
+BASE_URL  = "http://localhost:8000"
 SEPARATOR = "=" * 62
 
 # Maps the value_type strings from the API schema to Python callables.
 TYPE_CASTERS = {
-    "int": int,
-    "str": str,
+    "int":   int,
+    "str":   str,
     "float": float,
-    "bool": lambda v: v.strip().lower() in ("true", "1", "yes"),
+    "bool":  lambda v: v.strip().lower() in ("true", "1", "yes"),
+}
+
+# ANSI colors — cyan for success logs, red for error logs.
+_CYAN  = "\033[36m"
+_RED   = "\033[31m"
+_RESET = "\033[0m"
+
+# Human-readable status text for the HTTP log line.
+_STATUS_TEXT = {
+    200: "OK",
+    201: "Created",
+    400: "Bad Request",
+    404: "Not Found",
+    422: "Unprocessable Entity",
+    500: "Internal Server Error",
 }
 
 
@@ -42,10 +58,10 @@ def print_banner() -> None:
 def print_state(user_data: dict) -> None:
     """Render the user's current FSM position to the console."""
     progress = user_data.get("progress", {})
-    status = user_data.get("status", "—")
-    ratio = progress.get("completion_ratio", "—")
-    step = user_data.get("current_step") or "—"
-    task = user_data.get("current_task") or "—"
+    status   = user_data.get("status", "—")
+    ratio    = progress.get("completion_ratio", "—")
+    step     = user_data.get("current_step") or "—"
+    task     = user_data.get("current_task")  or "—"
 
     print(f"\n{SEPARATOR}")
     print(f"  Status  :  {status}")
@@ -55,9 +71,39 @@ def print_state(user_data: dict) -> None:
     print(SEPARATOR)
 
 
+def print_server_logs(method: str, path: str, status_code: int, user_id: str = "") -> None:
+    """
+    Print two lines of simulated server logs after every request.
+
+    Cyan for 2xx success; Red for 4xx/5xx errors.
+    Mirrors Uvicorn's access log format and the app's internal logger.
+    """
+    now        = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S,%f")[:-3]
+    short_id   = user_id[:8] if user_id else "????????"
+    status_txt = _STATUS_TEXT.get(status_code, str(status_code))
+    is_error   = status_code >= 400
+    color      = _RED if is_error else _CYAN
+
+    http_log = f'INFO:     127.0.0.1 - "{method} {path} HTTP/1.1" {status_code} {status_txt}'
+
+    if is_error:
+        logic_log = (
+            f"{now} [WARNING] app.api.routes: "
+            f"Request to {path} returned {status_code} {status_txt}."
+        )
+    else:
+        logic_log = (
+            f"{now} [INFO] app.repository.in_memory: "
+            f"User {short_id} successfully saved to store."
+        )
+
+    print(f"{color}{http_log}{_RESET}")
+    print(f"{color}{logic_log}{_RESET}")
+
+
 def print_error(status_code: int, detail) -> None:
-    """Pretty-print a 400 or 422 error response."""
-    print(f"\n  ✗  Validation error ({status_code}):")
+    """Pretty-print a 400 or 422 error detail payload."""
+    print(f"\n  ✗  Error ({status_code}):")
     if isinstance(detail, list):
         for err in detail:
             loc = err.get("loc", [])
@@ -82,12 +128,11 @@ def prompt_payload(schema: list) -> dict:
     print("\n  This task requires input:\n")
 
     for field in schema:
-        key = field["key_name"]
-        vtype = field["value_type"]
+        key         = field["key_name"]
+        vtype       = field["value_type"]
         description = field.get("description", "")
-        example = field.get("example")
+        example     = field.get("example")
 
-        # Build the prompt line
         hint_parts = [f"[{vtype}]"]
         if description:
             hint_parts.append(description)
@@ -125,15 +170,18 @@ def run() -> None:
                 print("  ✗  Email cannot be empty. Try again.")
                 continue
 
+            print(f"\n  [*] Calling POST /api/v1/users ...")
             resp = client.post("/api/v1/users", json={"email": email})
 
             if resp.status_code == 201:
                 user_data = resp.json()
-                user_id = user_data["user_id"]
-                print(f"\n  ✓  Registered! user_id: {user_id}")
+                user_id   = user_data["user_id"]
+                print_server_logs("POST", "/api/v1/users", 201, user_id)
+                print(f"  ✓  Registered! user_id: {user_id}")
                 break
 
             if resp.status_code in (400, 422):
+                print_server_logs("POST", "/api/v1/users", resp.status_code)
                 try:
                     detail = resp.json().get("detail", resp.text)
                 except Exception:
@@ -143,6 +191,7 @@ def run() -> None:
                 continue
 
             # Unexpected error — not recoverable
+            print_server_logs("POST", "/api/v1/users", resp.status_code)
             print(f"\n  ✗  Unexpected error ({resp.status_code}): {resp.text}")
             sys.exit(1)
 
@@ -163,9 +212,9 @@ def run() -> None:
                 break
 
             # Extract the HATEOAS next action link
-            links = user_data.get("_links", {})
+            links       = user_data.get("_links", {})
             next_action = links.get("next_action", {})
-            href = next_action.get("href")
+            href        = next_action.get("href")
 
             if not href:
                 print("\n  ✗  No next_action link in response. Cannot continue.")
@@ -173,25 +222,29 @@ def run() -> None:
 
             current_step = user_data.get("current_step", "")
             current_task = user_data.get("current_task", "")
-            schema = user_data.get("current_task_schema", [])
+            schema       = user_data.get("current_task_schema", [])
 
             # Build the payload — empty for AUTO_PASS, prompted for EVALUATE_PAYLOAD
             if not schema:
-                print(f"\n  → AUTO-PASS task '{current_task}'. Submitting empty payload...")
+                print(f"\n  [*] AUTO-PASS — submitting '{current_task}' with empty payload...")
                 payload: dict = {}
             else:
                 payload = prompt_payload(schema)
+                print(f"\n  [*] Submitting '{current_task}'...")
 
             # Submit via the HATEOAS-provided URL
             put_resp = client.put(
                 href,
                 json={
-                    "user_id": user_id,
+                    "user_id":      user_id,
                     "current_step": current_step,
                     "current_task": current_task,
                     "task_payload": payload,
                 },
             )
+
+            # Log every response — color reflects success or failure
+            print_server_logs("PUT", "/api/v1/tasks/complete", put_resp.status_code, user_id)
 
             # Graceful handling of 400/422 — loop continues so user can retry
             if put_resp.status_code in (400, 422):
@@ -210,7 +263,7 @@ def run() -> None:
 
             # Advance to next state using the response as the new source of truth
             user_data = put_resp.json()
-            print(f"\n  ✓  Task '{current_task}' completed.")
+            print(f"  ✓  Step processed successfully!")
 
 
 if __name__ == "__main__":
