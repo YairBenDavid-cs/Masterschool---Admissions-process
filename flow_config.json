@@ -35,6 +35,12 @@
     "submit_personal_details": {
       "name": "submit_personal_details",
       "pass_condition_type": "AUTO_PASS",
+      "payload_schema": [
+        {"key_name": "first_name", "value_type": "str", "required": true, "description": "Applicant's first name", "example": "Jane"},
+        {"key_name": "last_name",  "value_type": "str", "required": true, "description": "Applicant's last name",  "example": "Doe"},
+        {"key_name": "email",      "value_type": "str", "required": true, "description": "Applicant's email address", "example": "jane.doe@example.com"},
+        {"key_name": "timestamp",  "value_type": "int", "required": true, "description": "Unix timestamp of submission", "example": 1700000000}
+      ],
       "transitions": [
         {
           "condition": "DEFAULT",
@@ -47,7 +53,9 @@
       "name": "perform_iq_test",
       "pass_condition_type": "EVALUATE_PAYLOAD",
       "payload_schema": [
-        {"key_name": "score", "value_type": "int", "required": true, "description": "IQ test score (0-150)", "example": 85}
+        {"key_name": "score",     "value_type": "int", "required": true, "description": "IQ test score (0-150)", "example": 85},
+        {"key_name": "test_id",   "value_type": "str", "required": true, "description": "Unique identifier of the test session", "example": "test-001"},
+        {"key_name": "timestamp", "value_type": "int", "required": true, "description": "Unix timestamp of test completion", "example": 1700000000}
       ],
       "transitions": [
         {
@@ -92,6 +100,9 @@
     "schedule_interview": {
       "name": "schedule_interview",
       "pass_condition_type": "AUTO_PASS",
+      "payload_schema": [
+        {"key_name": "interview_date", "value_type": "str", "required": true, "description": "Scheduled interview date (ISO 8601 format)", "example": "2025-06-01"}
+      ],
       "transitions": [
         {
           "condition": "DEFAULT",
@@ -104,16 +115,18 @@
       "name": "perform_interview",
       "pass_condition_type": "EVALUATE_PAYLOAD",
       "payload_schema": [
-        {"key_name": "decision", "value_type": "str", "required": true, "description": "Interview outcome: 'pass' to advance, 'fail' to reject", "example": "pass", "allowed_values": ["pass", "fail"]}
+        {"key_name": "decision",      "value_type": "str", "required": true, "description": "Interview outcome", "example": "passed_interview", "allowed_values": ["passed_interview", "failed_interview"]},
+        {"key_name": "interview_date","value_type": "str", "required": true, "description": "Date the interview was conducted (ISO 8601 format)", "example": "2025-06-01"},
+        {"key_name": "interviewer_id","value_type": "str", "required": true, "description": "Unique identifier of the interviewer", "example": "int-001"}
       ],
       "transitions": [
         {
-          "condition": "payload.get('decision') == 'pass'",
+          "condition": "payload.get('decision') == 'passed_interview'",
           "next_step": "sign_contract",
           "next_task": "upload_identification_document"
         },
         {
-          "condition": "payload.get('decision') == 'fail'",
+          "condition": "payload.get('decision') == 'failed_interview'",
           "next_step": "TERMINAL_REJECTED",
           "next_task": "NONE",
           "mark_status": "REJECTED"
@@ -129,6 +142,10 @@
     "upload_identification_document": {
       "name": "upload_identification_document",
       "pass_condition_type": "AUTO_PASS",
+      "payload_schema": [
+        {"key_name": "passport_number", "value_type": "str", "required": true, "description": "Applicant's passport number", "example": "AB123456"},
+        {"key_name": "timestamp",       "value_type": "int", "required": true, "description": "Unix timestamp of document upload", "example": 1700000000}
+      ],
       "transitions": [
         {
           "condition": "DEFAULT",
@@ -140,6 +157,9 @@
     "sign_contract_task": {
       "name": "sign_contract_task",
       "pass_condition_type": "AUTO_PASS",
+      "payload_schema": [
+        {"key_name": "timestamp", "value_type": "int", "required": true, "description": "Unix timestamp of contract signing", "example": 1700000000}
+      ],
       "transitions": [
         {
           "condition": "DEFAULT",
@@ -151,6 +171,10 @@
     "process_payment": {
       "name": "process_payment",
       "pass_condition_type": "AUTO_PASS",
+      "payload_schema": [
+        {"key_name": "payment_id", "value_type": "str", "required": true, "description": "Unique payment transaction identifier", "example": "pay-001"},
+        {"key_name": "timestamp",  "value_type": "int", "required": true, "description": "Unix timestamp of payment completion", "example": 1700000000}
+      ],
       "transitions": [
         {
           "condition": "DEFAULT",
@@ -162,6 +186,10 @@
     "join_slack_task": {
       "name": "join_slack_task",
       "pass_condition_type": "AUTO_PASS",
+      "payload_schema": [
+        {"key_name": "email",     "value_type": "str", "required": true, "description": "Email address used to join the Slack workspace", "example": "jane.doe@example.com"},
+        {"key_name": "timestamp", "value_type": "int", "required": true, "description": "Unix timestamp of Slack join event", "example": 1700000000}
+      ],
       "transitions": [
         {
           "condition": "DEFAULT",
