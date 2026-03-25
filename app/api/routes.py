@@ -43,6 +43,40 @@ from app.repository.in_memory import get_repo, UserRepository
 
 router = APIRouter(prefix="/api/v1", tags=["Admissions Flow"])
 
+# =============================================================================
+# SHARED ERROR RESPONSE DOCUMENTATION
+# =============================================================================
+
+_404_response = {
+    "description": "User not found",
+    "content": {"application/json": {"example": {"detail": "User with ID abc-123 not found."}}}
+}
+_400_response = {
+    "description": "Bad Request — email already registered, terminal state, or task mismatch",
+    "content": {"application/json": {"example": {"detail": "User abc-123 is already in a terminal state: REJECTED"}}}
+}
+_422_response = {
+    "description": "Unprocessable Entity — payload contract violation (missing or wrong-type field)",
+    "content": {
+        "application/json": {
+            "examples": {
+                "missing_field": {
+                    "summary": "Required field missing",
+                    "value": {"detail": "Task 'perform_iq_test' requires field 'score' (type: int) but it was not provided."}
+                },
+                "wrong_type": {
+                    "summary": "Wrong field type",
+                    "value": {"detail": "Task 'perform_iq_test': field 'score' must be 'int', got 'str'."}
+                }
+            }
+        }
+    }
+}
+_500_response = {
+    "description": "Internal Server Error — FSM configuration error",
+    "content": {"application/json": {"example": {"detail": "Decision engine failure."}}}
+}
+
 
 # =============================================================================
 # 1. POST - Create a user in the system
@@ -52,7 +86,8 @@ router = APIRouter(prefix="/api/v1", tags=["Admissions Flow"])
     "/users",
     summary="Register a New Candidate",
     response_model=UserStatusResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
+    responses={400: _400_response}
 )
 def register_user(
     request: UserCreateRequest,
@@ -125,7 +160,8 @@ def get_flow(flow: FlowConfig = Depends(get_flow_config)) -> FlowDefinitionRespo
     "/users/{user_id}/current",
     summary="Get Candidate's Current Step & Task",
     response_model=Dict[str, str],
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
+    responses={404: _404_response}
 )
 def get_user_current_step_and_task(
     user_id: str,
@@ -167,7 +203,8 @@ def get_user_current_step_and_task(
     "/tasks/complete",
     summary="Complete a Task & Advance the FSM",
     response_model=UserStatusResponse,
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
+    responses={400: _400_response, 404: _404_response, 422: _422_response, 500: _500_response}
 )
 def complete_task(
     request: TaskCompleteRequest,
@@ -226,7 +263,8 @@ def complete_task(
     "/users/{user_id}/status",
     summary="Get Candidate's Admission Status",
     response_model=Dict[str, str],
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
+    responses={404: _404_response}
 )
 def get_user_status(
     user_id: str,
@@ -266,7 +304,8 @@ def get_user_status(
     "/users/{user_id}/flow",
     summary="Get Candidate's Personalized Flow",
     response_model=UserFlowResponse,
-    status_code=status.HTTP_200_OK
+    status_code=status.HTTP_200_OK,
+    responses={404: _404_response}
 )
 def get_user_personalized_flow(
     user_id: str,

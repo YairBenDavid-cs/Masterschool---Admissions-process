@@ -1,13 +1,15 @@
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 # Router import
 from app.api.routes import router as api_router
 
 # Configuration and Core imports
-from app.core.config import load_flow_config, Settings
+from app.core.config import load_flow_config, get_flow_config, Settings
+from app.core.config_models import PassConditionType
 from app.core.engine import EngineEvaluationError
 
 # =============================================================================
@@ -128,3 +130,103 @@ def health_check() -> dict[str, str]:
         dict: A simple health status indicator.
     """
     return {"status": "healthy"}
+
+
+# =============================================================================
+# DYNAMIC OPENAPI / SWAGGER OVERRIDE
+# =============================================================================
+
+def _build_dynamic_openapi() -> dict:
+    """
+    Generates the OpenAPI schema with examples derived from flow_config.json.
+
+    Cached after first generation via app.openapi_schema — regenerated on
+    next server restart when the config changes. Zero Python changes needed
+    when a PM updates example values in flow_config.json.
+    """
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+
+    flow = get_flow_config()
+
+    # Find the first EVALUATE_PAYLOAD task that has at least one example defined
+    example_task = next(
+        (bp for bp in flow.tasks_map.values()
+         if bp.pass_condition_type == PassConditionType.EVALUATE_PAYLOAD
+         and bp.payload_schema
+         and any(f.example is not None for f in bp.payload_schema)),
+        None
+    )
+
+    if example_task:
+        payload_example = {
+            f.key_name: f.example
+            for f in example_task.payload_schema
+            if f.example is not None
+        }
+        task_step_name = next(
+            (step.name for step in flow.default_steps if example_task.name in step.tasks),
+            example_task.name
+        )
+
+        schemas = schema.get("components", {}).get("schemas", {})
+
+        if "TaskCompleteRequest" in schemas and payload_example:
+            schemas["TaskCompleteRequest"]["example"] = {
+                "user_id": "<paste-user-id-from-POST-/users>",
+                "current_step": task_step_name,
+                "current_task": example_task.name,
+                "task_payload": payload_example
+            }
+
+        if "UserStatusResponse" in schemas:
+            schema_example_fields = [
+                {
+                    "key_name": f.key_name,
+                    "value_type": f.value_type,
+                    "required": f.required,
+                    "description": f.description,
+                    "example": f.example,
+                }
+                for f in example_task.payload_schema
+            ]
+            schemas["UserStatusResponse"]["example"] = {
+                "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+                "email": "candidate@masterschool.com",
+                "status": "IN_PROGRESS",
+                "current_step": task_step_name,
+                "current_task": example_task.name,
+                "custom_flow": [],
+                "progress": {
+                    "current_step_index": 1,
+                    "total_steps": 8,
+                    "completion_ratio": "1/8",
+                    "is_terminal": False
+                },
+                "_links": {
+                    "self": {
+                        "href": "/api/v1/users/a1b2c3d4-.../status",
+                        "method": "GET",
+                        "description": "View overarching candidate status"
+                    },
+                    "next_action": {
+                        "href": "/api/v1/tasks/complete",
+                        "method": "PUT",
+                        "description": f"Submit payload for task: {example_task.name}"
+                    }
+                },
+                "current_task_schema": schema_example_fields
+            }
+
+    app.openapi_schema = schema
+    return app.openapi_schema
+
+
+app.openapi = _build_dynamic_openapi

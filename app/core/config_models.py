@@ -46,6 +46,10 @@ class FieldDefinition(BaseModel):
     )
     required: bool = Field(default=True, description="Whether the field is mandatory")
     description: str = Field(default="", description="Human-readable hint for the frontend")
+    example: Optional[Any] = Field(
+        default=None,
+        description="A concrete example value for this field, used to populate Swagger UI examples dynamically."
+    )
 
 
 class TransitionRule(BaseModel):

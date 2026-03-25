@@ -51,22 +51,22 @@ def validate_task_payload(payload: Dict[str, Any], task_blueprint: TaskBlueprint
 
     for field_def in task_blueprint.payload_schema:
         # 1. Check required presence
-        if field_def.required and field_def.name not in payload:
+        if field_def.required and field_def.key_name not in payload:
             msg = (
-                f"Task '{task_blueprint.name}' requires field '{field_def.name}' "
-                f"(type: {field_def.type}) but it was not provided."
+                f"Task '{task_blueprint.name}' requires field '{field_def.key_name}' "
+                f"(type: {field_def.value_type}) but it was not provided."
             )
             logger.warning(msg)
             raise PayloadValidationError(msg)
 
         # 2. Type check when field is present
-        if field_def.name in payload:
-            expected_type = _PYTHON_TYPE_MAP.get(field_def.type)
-            if expected_type and not isinstance(payload[field_def.name], expected_type):
-                actual_type = type(payload[field_def.name]).__name__
+        if field_def.key_name in payload:
+            expected_type = _PYTHON_TYPE_MAP.get(field_def.value_type)
+            if expected_type and not isinstance(payload[field_def.key_name], expected_type):
+                actual_type = type(payload[field_def.key_name]).__name__
                 msg = (
-                    f"Task '{task_blueprint.name}': field '{field_def.name}' must be "
-                    f"'{field_def.type}', got '{actual_type}'."
+                    f"Task '{task_blueprint.name}': field '{field_def.key_name}' must be "
+                    f"'{field_def.value_type}', got '{actual_type}'."
                 )
                 logger.warning(msg)
                 raise PayloadValidationError(msg)

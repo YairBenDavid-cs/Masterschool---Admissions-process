@@ -47,7 +47,7 @@
       "name": "perform_iq_test",
       "pass_condition_type": "EVALUATE_PAYLOAD",
       "payload_schema": [
-        {"key_name": "score", "value_type": "int", "required": true, "description": "IQ test score (0-150)"}
+        {"key_name": "score", "value_type": "int", "required": true, "description": "IQ test score (0-150)", "example": 85}
       ],
       "transitions": [
         {
@@ -73,7 +73,7 @@
       "name": "second_chance_iq",
       "pass_condition_type": "EVALUATE_PAYLOAD",
       "payload_schema": [
-        {"key_name": "score", "value_type": "int", "required": true, "description": "Second-chance IQ test score (0-150)"}
+        {"key_name": "score", "value_type": "int", "required": true, "description": "Second-chance IQ test score (0-150)", "example": 80}
       ],
       "transitions": [
         {
@@ -104,7 +104,7 @@
       "name": "perform_interview",
       "pass_condition_type": "EVALUATE_PAYLOAD",
       "payload_schema": [
-        {"key_name": "decision", "value_type": "str", "required": true, "description": "Interview outcome: 'passed_interview' or any other string for rejection"}
+        {"key_name": "decision", "value_type": "str", "required": true, "description": "Interview outcome: 'passed_interview' or any other string for rejection", "example": "passed_interview"}
       ],
       "transitions": [
         {

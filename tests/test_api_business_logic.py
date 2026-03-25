@@ -347,7 +347,7 @@ def test_flow_blueprint_exposes_payload_schema():
     # Assert
     iq_schema = blueprint["tasks_map"]["perform_iq_test"].get("payload_schema", [])
     assert len(iq_schema) > 0
-    assert any(f["name"] == "score" for f in iq_schema)
+    assert any(f["key_name"] == "score" for f in iq_schema)
 
 
 def test_all_evaluate_payload_tasks_have_schema():
@@ -412,7 +412,7 @@ def test_current_task_schema_populated_for_evaluate_payload_task():
     # Assert
     schema = user_data["current_task_schema"]
     assert len(schema) > 0
-    assert any(f["name"] == "score" and f["type"] == "int" for f in schema)
+    assert any(f["key_name"] == "score" and f["value_type"] == "int" for f in schema)
 
 
 def test_current_task_schema_empty_for_terminal_user():

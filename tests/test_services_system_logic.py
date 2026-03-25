@@ -605,7 +605,7 @@ def test_validate_missing_required_field_raises() -> None:
     Expected Behavior:
         PayloadValidationError raised, message references the missing field name.
     """
-    field = FieldDefinition(name="score", type="int", required=True)
+    field = FieldDefinition(key_name="score", value_type="int", required=True)
     task = _make_task_with_schema([field])
     with pytest.raises(PayloadValidationError, match="score"):
         validate_task_payload({}, task)
@@ -619,7 +619,7 @@ def test_validate_wrong_type_raises() -> None:
         Submitting 'score' as a string when 'int' is expected raises
         PayloadValidationError with the expected type in the message.
     """
-    field = FieldDefinition(name="score", type="int", required=True)
+    field = FieldDefinition(key_name="score", value_type="int", required=True)
     task = _make_task_with_schema([field])
     with pytest.raises(PayloadValidationError, match="int"):
         validate_task_payload({"score": "not_an_int"}, task)
@@ -632,7 +632,7 @@ def test_validate_optional_field_absent_is_ok() -> None:
     Expected Behavior:
         When required=False and the field is missing, no exception is raised.
     """
-    field = FieldDefinition(name="notes", type="str", required=False)
+    field = FieldDefinition(key_name="notes", value_type="str", required=False)
     task = _make_task_with_schema([field])
     validate_task_payload({}, task)  # Must not raise
 
@@ -645,7 +645,7 @@ def test_validate_optional_field_wrong_type_raises() -> None:
         When required=False but the field IS present with the wrong type,
         PayloadValidationError is raised.
     """
-    field = FieldDefinition(name="notes", type="str", required=False)
+    field = FieldDefinition(key_name="notes", value_type="str", required=False)
     task = _make_task_with_schema([field])
     with pytest.raises(PayloadValidationError, match="str"):
         validate_task_payload({"notes": 123}, task)
@@ -658,6 +658,6 @@ def test_validate_correct_payload_passes() -> None:
     Expected Behavior:
         Correct field name and matching type result in a clean no-op return.
     """
-    field = FieldDefinition(name="score", type="int", required=True)
+    field = FieldDefinition(key_name="score", value_type="int", required=True)
     task = _make_task_with_schema([field])
     validate_task_payload({"score": 85}, task)  # Must not raise
