@@ -2,26 +2,26 @@ version: '3.8'
 
 services:
   admissions-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     container_name: Masterschool-Admissions-Engine
-    
-    # 1. Self-Healing: Restart automatically if the app crashes or server reboots
+
+    # Self-healing: restart automatically if the app crashes or the host reboots
     restart: unless-stopped
-    
+
     ports:
       - "8000:8000"
-      
+
     volumes:
-      # 2. Security: Mount as Read-Only (':ro'). The container can read the PM's changes, 
-      # but if hacked, the attacker cannot modify the host's file.
+      # Security: mount flow_config.json read-only so the container cannot
+      # modify the host file even if compromised
       - ./flow_config.json:/app/flow_config.json:ro
-      
+
     environment:
       - FLOW_CONFIG_PATH=/app/flow_config.json
-      
-    # 3. Resource Management: Prevent memory leaks from taking down the whole host server
+
+    # Resource guardrails: prevent runaway memory from taking down the host
     deploy:
       resources:
         limits:
