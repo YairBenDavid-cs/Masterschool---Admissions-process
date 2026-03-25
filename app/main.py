@@ -80,28 +80,12 @@ The email is pre-filled. Copy the `user_id` from the response.
 
 ### Step 2 · Advance Through the Flow 🔄
 **`PUT /api/v1/tasks/complete`** → paste your `user_id` → **Execute**
-Each response returns the **next** `current_step` and `current_task` via `_links`.
+Each response returns the **next** `step_name` and `task_name` via `_links`.
 Repeat until `status` is `ACCEPTED` or `REJECTED`.
 
 ### Step 3 · Check the Final Decision ✅
 **`GET /api/v1/users/{user_id}/status`** → paste your `user_id`
 Returns the candidate's current status and progress at any point in the flow.
-
----
-
-## 🗺️ Admissions Funnel
-
-| # | Step | Task | Type |
-|---|------|------|------|
-| 1 | Personal Details | `submit_personal_details` | Auto-pass |
-| 2 | IQ Test | `perform_iq_test` | Evaluated payload |
-| ↳ | *(if score < 70)* | `second_chance_iq` | Injected · Evaluated payload |
-| 3 | Interview | `schedule_interview` | Auto-pass |
-| 4 | Interview | `perform_interview` | Evaluated payload |
-| 5 | Sign Contract | `upload_identification_document` | Auto-pass |
-| 6 | Sign Contract | `sign_contract_task` | Auto-pass |
-| 7 | Payment | `process_payment` | Auto-pass |
-| 8 | Join Slack | `join_slack_task` | Auto-pass → **ACCEPTED** |
 
 ---
 
@@ -112,9 +96,14 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "personal_details",
-  "current_task": "submit_personal_details",
-  "task_payload": {}
+  "step_name": "personal_details",
+  "task_name": "submit_personal_details",
+  "task_payload": {
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "email": "candidate@masterschool.com",
+    "timestamp": 1700000000
+  }
 }
 ```
 
@@ -124,14 +113,16 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "iq_test",
-  "current_task": "perform_iq_test",
+  "step_name": "iq_test",
+  "task_name": "perform_iq_test",
   "task_payload": {
-    "score": 85
+    "score": 85,
+    "test_id": "test-001",
+    "timestamp": 1700000000
   }
 }
 ```
-> 💡 Score **≥ 70** to pass. Use `40` to trigger the second-chance path.
+> 💡 Score **> 75** to pass. Use `65` to trigger the second-chance path. `test_id` is a session identifier; `timestamp` is Unix epoch.
 
 ---
 
@@ -139,14 +130,16 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "iq_test",
-  "current_task": "second_chance_iq",
+  "step_name": "iq_test",
+  "task_name": "second_chance_iq",
   "task_payload": {
-    "score": 80
+    "score": 80,
+    "test_id": "test-002",
+    "timestamp": 1700000000
   }
 }
 ```
-> 💡 Only appears if `perform_iq_test` score was below threshold. Same scoring rules apply.
+> 💡 Only appears if `perform_iq_test` score was below threshold. Same scoring rules apply (> 75 to pass).
 
 ---
 
@@ -154,9 +147,11 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "interview",
-  "current_task": "schedule_interview",
-  "task_payload": {}
+  "step_name": "interview",
+  "task_name": "schedule_interview",
+  "task_payload": {
+    "interview_date": "2025-06-01"
+  }
 }
 ```
 
@@ -166,14 +161,16 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "interview",
-  "current_task": "perform_interview",
+  "step_name": "interview",
+  "task_name": "perform_interview",
   "task_payload": {
-    "decision": "pass"
+    "decision": "passed_interview",
+    "interview_date": "2025-06-01",
+    "interviewer_id": "int-001"
   }
 }
 ```
-> 💡 Allowed values: `"pass"` · `"fail"`
+> 💡 Allowed values: `"passed_interview"` · `"failed_interview"`. `interview_date` is ISO 8601.
 
 ---
 
@@ -181,9 +178,12 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "sign_contract",
-  "current_task": "upload_identification_document",
-  "task_payload": {}
+  "step_name": "sign_contract",
+  "task_name": "upload_identification_document",
+  "task_payload": {
+    "passport_number": "AB123456",
+    "timestamp": 1700000000
+  }
 }
 ```
 
@@ -193,9 +193,11 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "sign_contract",
-  "current_task": "sign_contract_task",
-  "task_payload": {}
+  "step_name": "sign_contract",
+  "task_name": "sign_contract_task",
+  "task_payload": {
+    "timestamp": 1700000000
+  }
 }
 ```
 
@@ -205,9 +207,12 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "payment",
-  "current_task": "process_payment",
-  "task_payload": {}
+  "step_name": "payment",
+  "task_name": "process_payment",
+  "task_payload": {
+    "payment_id": "pay-001",
+    "timestamp": 1700000000
+  }
 }
 ```
 
@@ -217,9 +222,12 @@ Returns the candidate's current status and progress at any point in the flow.
 ```json
 {
   "user_id": "<your-user-id>",
-  "current_step": "join_slack",
-  "current_task": "join_slack_task",
-  "task_payload": {}
+  "step_name": "join_slack",
+  "task_name": "join_slack_task",
+  "task_payload": {
+    "email": "candidate@masterschool.com",
+    "timestamp": 1700000000
+  }
 }
 ```
 
@@ -341,8 +349,8 @@ def _build_dynamic_openapi() -> dict:
         if "TaskCompleteRequest" in schemas and payload_example:
             schemas["TaskCompleteRequest"]["example"] = {
                 "user_id": "<paste-user-id-from-POST-/users>",
-                "current_step": task_step_name,
-                "current_task": example_task.name,
+                "step_name": task_step_name,
+                "task_name": example_task.name,
                 "task_payload": payload_example
             }
 
@@ -361,8 +369,8 @@ def _build_dynamic_openapi() -> dict:
                 "user_id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
                 "email": "candidate@masterschool.com",
                 "status": "IN_PROGRESS",
-                "current_step": task_step_name,
-                "current_task": example_task.name,
+                "step_name": task_step_name,
+                "task_name": example_task.name,
                 "custom_flow": [],
                 "progress": {
                     "current_step_index": 1,
@@ -452,7 +460,7 @@ def _build_dynamic_openapi() -> dict:
         paths = schema.get("paths", {})
         _patch_path_example(
             paths, "/api/v1/users/{user_id}/current", "get",
-            {"current_step": task_step_name, "current_task": example_task.name},
+            {"step_name": task_step_name, "task_name": example_task.name},
         )
         _patch_path_example(
             paths, "/api/v1/users/{user_id}/status", "get",
@@ -475,6 +483,25 @@ _SWAGGER_CUSTOM_CSS = """
   .swagger-ui .info .title { display: none !important; }
   /* Hide the /openapi.json URL link */
   .swagger-ui .info .url   { display: none !important; }
+
+  /* Make the Cheat Sheet <details> block unmissable */
+  .swagger-ui .info .description details {
+    background: #fffbeb;
+    border: 2px solid #f59e0b;
+    border-radius: 8px;
+    padding: 12px 20px;
+    margin-top: 20px;
+  }
+  .swagger-ui .info .description details summary {
+    font-size: 1.15em;
+    font-weight: 800;
+    color: #b45309;
+    cursor: pointer;
+  }
+  .swagger-ui .info .description details summary::before {
+    content: "⚠️ READ THIS FIRST  ";
+    color: #dc2626;
+  }
 </style>
 """
 

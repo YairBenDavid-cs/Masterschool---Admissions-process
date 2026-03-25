@@ -9,7 +9,7 @@ Allows manual testing of all 6 endpoints with:
   - Full colorized JSON output
 
 Usage:
-    python api_explorer.py
+    python scripts/api_explorer.py
 
 Requirements:
     Server must be running at http://localhost:8000

@@ -3,13 +3,15 @@ Masterschool Admissions — Candidate Portal
 A Streamlit-powered onboarding wizard backed by the FastAPI admissions engine.
 
 Usage:
-    streamlit run candidate_portal.py
+    streamlit run scripts/candidate_portal.py
 
 Requirements:
     pip install streamlit httpx
     FastAPI server running at http://localhost:8000
 """
 
+import datetime
+import time
 from typing import Optional
 
 import httpx
@@ -92,7 +94,6 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
 
     # --- Specific task: IQ Test ---
     if task_name == "perform_iq_test":
-        import time
         st.markdown("#### IQ Assessment")
         st.markdown("Select the range that best describes your result:")
         labels  = [f"{name} (score: {val})" for name, val in IQ_TIERS]
@@ -112,12 +113,24 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
         tier_name = choice.split(" (")[0]
         score   = dict(IQ_TIERS)[tier_name]
         if st.button("Submit Second Attempt", use_container_width=True, type="primary"):
-            return {"score": score}
+            return {"score": score, "test_id": "test-002", "timestamp": int(time.time())}
+        return None
+
+    # --- Specific task: Schedule Interview ---
+    if task_name == "schedule_interview":
+        icon, label = TASK_LABELS.get(task_name, ("📅", "Schedule Interview"))
+        st.info(f"{icon}  Please select your interview date.")
+        interview_date = st.date_input(
+            "Interview Date",
+            value=datetime.date.today(),
+            min_value=datetime.date.today(),
+        )
+        if st.button("Confirm Date →", use_container_width=True, type="primary"):
+            return {"interview_date": interview_date.isoformat(), "timestamp": int(time.time())}
         return None
 
     # --- Specific task: Interview ---
     if task_name == "perform_interview":
-        import time
         st.markdown("#### Interview Outcome")
         st.markdown("Record the interviewer's final decision:")
         decision_label = st.radio(
@@ -128,9 +141,17 @@ def render_task_widget(task_name: str, schema: list) -> Optional[dict]:
         )
         decision = "passed_interview" if "Pass" in decision_label else "failed_interview"
         interviewer_id = st.text_input("Interviewer ID", value="int-001")
-        interview_date = st.text_input("Interview Date (YYYY-MM-DD)", value="2025-06-01")
+        interview_date = st.date_input(
+            "Interview Date",
+            value=datetime.date.today(),
+        )
         if st.button("Record Outcome", use_container_width=True, type="primary"):
-            return {"decision": decision, "interviewer_id": interviewer_id, "interview_date": interview_date}
+            return {
+                "decision": decision,
+                "interviewer_id": interviewer_id,
+                "interview_date": interview_date.isoformat(),
+                "timestamp": int(time.time()),
+            }
         return None
 
     # --- AUTO-PASS tasks (empty schema) ---
@@ -222,6 +243,11 @@ def flow_page() -> None:
         if st.button("🔄 Reset Session", use_container_width=True):
             st.session_state.clear()
             st.rerun()
+        if "last_payload_debug" in st.session_state:
+            st.divider()
+            with st.expander("🔬 Last Payload Sent", expanded=True):
+                st.caption("Auto-generated and sent to the API:")
+                st.json(st.session_state.last_payload_debug)
 
     # --- Header + Progress Bar ---
     st.markdown("## Masterschool Admissions Portal")
@@ -242,6 +268,12 @@ def flow_page() -> None:
     payload = render_task_widget(task_name, schema)
 
     if payload is not None:
+        st.session_state.last_payload_debug = {
+            "user_id": user_id,
+            "step_name": step_name,
+            "task_name": task_name,
+            "task_payload": payload,
+        }
         with st.spinner("Processing..."):
             resp = put_complete_task(user_id, step_name, task_name, payload)
 
