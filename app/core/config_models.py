@@ -39,8 +39,8 @@ class FieldDefinition(BaseModel):
     Adding or removing a field here automatically updates enforcement and
     the self-describing API response — with zero changes to Python source.
     """
-    name: str = Field(..., description="Payload key name (e.g., 'score')")
-    type: str = Field(
+    key_name: str = Field(..., description="Payload key name (e.g., 'score')")
+    value_type: str = Field(
         ...,
         description="Expected Python type as a string: 'int', 'str', 'float', or 'bool'"
     )
