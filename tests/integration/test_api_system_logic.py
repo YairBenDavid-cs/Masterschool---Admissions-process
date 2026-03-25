@@ -13,7 +13,6 @@ from tests.helpers.utils_api import (
 
 pytestmark = pytest.mark.system
 
-
 # =============================================================================
 # 1. User Management & HATEOAS Discovery
 # =============================================================================
