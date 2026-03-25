@@ -564,11 +564,13 @@ def test_get_user_flow_accepted_all_completed():
 
 def test_get_user_flow_rejected_states_split_correctly():
     """
-    [Layer A] GET /users/{id}/flow - Validates that after rejection, tasks up to and
-    including the last completed task are COMPLETED, and subsequent tasks are PENDING.
+    [Layer A] GET /users/{id}/flow - Validates that after rejection, tasks before the
+    rejection point are COMPLETED, the rejection task is FAILED, and subsequent tasks
+    are PENDING.
 
     Expected Behavior:
-        Tasks before and at the rejection point → COMPLETED
+        Tasks before the rejection point → COMPLETED
+        The rejection-triggering task → FAILED
         Tasks after the rejection point → PENDING
         No CURRENT tasks (user is terminal)
     """
@@ -600,16 +602,20 @@ def test_get_user_flow_rejected_states_split_correctly():
     assert data["status"] == "REJECTED"
     states = [t["state"] for t in data["tasks"]]
     assert "CURRENT" not in states
-    # There must be at least one COMPLETED task and at least one PENDING task
     assert "COMPLETED" in states
+    assert "FAILED" in states
     assert "PENDING" in states
-    # All PENDING tasks must come after all COMPLETED tasks
+    # Ordering: COMPLETED... → FAILED (exactly once) → PENDING...
+    seen_failed = False
     seen_pending = False
     for s in states:
-        if s == "PENDING":
+        if s == "FAILED":
+            assert not seen_pending, "FAILED task found after a PENDING task"
+            seen_failed = True
+        elif s == "PENDING":
             seen_pending = True
-        elif s == "COMPLETED" and seen_pending:
-            pytest.fail("Found COMPLETED task after a PENDING task — ordering is wrong")
+        elif s == "COMPLETED":
+            assert not seen_failed, "COMPLETED task found after the FAILED task"
 
 
 def test_get_user_flow_total_tasks_matches_progress_total_steps():

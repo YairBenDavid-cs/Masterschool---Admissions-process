@@ -13,6 +13,7 @@ from app.core.config_models import FlowConfig, Status, StepBlueprint, Transition
 from app.core.engine import evaluate_transition, EngineEvaluationError
 from app.core.validator import validate_task_payload, PayloadValidationError  # re-exported below
 from app.core.logging_config import get_logger
+from app.models.schemas import PersonalizedTaskItem, TaskState, OutcomeInfo
 
 logger = get_logger(__name__)
 
@@ -257,6 +258,97 @@ def get_user_flow(user_id: str, repo: UserRepository, flow: FlowConfig) -> tuple
     user = get_user_record(user_id, repo)
     sequence = build_personalized_task_sequence(user, flow)
     return user, sequence
+
+
+def build_user_flow_data(
+    user: User,
+    task_sequence: list[str],
+    flow: FlowConfig,
+) -> tuple[list[PersonalizedTaskItem], int, Optional[OutcomeInfo]]:
+    """
+    Annotates each task in the user's personalized sequence with its current state.
+
+    Determines whether each task is COMPLETED, CURRENT, PENDING, or FAILED based
+    on the user's FSM position, and calculates the 1-based current task number
+    and any rejection outcome.
+
+    Args:
+        user (User): The user entity containing current workflow state.
+        task_sequence (list[str]): Ordered list of task IDs for this user.
+        flow (FlowConfig): The FSM configuration for step/task metadata.
+
+    Returns:
+        tuple: (annotated tasks, current_task_number, outcome)
+    """
+    total = len(task_sequence)
+
+    # Reverse map: task_id → step_name (injected tasks inherit adjacent default step)
+    task_to_step: dict[str, str] = {
+        tid: step.name
+        for step in flow.default_steps
+        for tid in step.tasks
+    }
+
+    # Determine anchor task and failure attribution
+    if user.is_terminated():
+        anchor_task = user.last_completed_task
+        failed_task = user.last_completed_task if user.status == Status.REJECTED else None
+    else:
+        anchor_task = user.current_task
+        failed_task = None
+
+    # Calculate current_task_number (1-based)
+    if user.status == Status.ACCEPTED:
+        current_task_number = total
+    elif user.status == Status.REJECTED:
+        if failed_task and failed_task in task_sequence:
+            current_task_number = task_sequence.index(failed_task) + 1
+        else:
+            current_task_number = 0
+    else:  # IN_PROGRESS
+        if anchor_task and anchor_task in task_sequence:
+            current_task_number = task_sequence.index(anchor_task) + 1
+        else:
+            current_task_number = 0
+
+    # Walk the sequence — track step context so injected tasks inherit the correct step_name
+    tasks: list[PersonalizedTaskItem] = []
+    step_ctx: str = ""
+    found_anchor = False
+
+    for task_id in task_sequence:
+        if task_id in task_to_step:
+            step_ctx = task_to_step[task_id]
+
+        if task_id == anchor_task:
+            if user.status == Status.REJECTED:
+                task_state = TaskState.FAILED
+            elif user.status == Status.ACCEPTED:
+                task_state = TaskState.COMPLETED
+            else:
+                task_state = TaskState.CURRENT
+            found_anchor = True
+        elif not found_anchor:
+            task_state = TaskState.COMPLETED
+        else:
+            task_state = TaskState.COMPLETED if user.status == Status.ACCEPTED else TaskState.PENDING
+
+        tasks.append(PersonalizedTaskItem(
+            task_id=task_id,
+            state=task_state,
+            is_injected=task_id in user.custom_flow,
+            step_name=step_ctx,
+        ))
+
+    # Build outcome for REJECTED users
+    outcome = None
+    if user.status == Status.REJECTED and user.last_completed_task:
+        outcome = OutcomeInfo(
+            failed_at_task=user.last_completed_task,
+            reason=f"Application rejected at task: {user.last_completed_task}",
+        )
+
+    return tasks, current_task_number, outcome
 
 
 def _update_custom_flow(user: User, transition: TransitionRule) -> None:

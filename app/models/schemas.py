@@ -155,16 +155,25 @@ class TaskState(str, Enum):
     COMPLETED = "COMPLETED"
     CURRENT = "CURRENT"
     PENDING = "PENDING"
+    FAILED = "FAILED"
 
 
 class PersonalizedTaskItem(BaseModel):
     """Represents a single task entry in a user's personalized flow sequence."""
+    step_name: str = Field(..., description="The parent step this task belongs to")
     task_id: str = Field(..., description="Unique task identifier")
-    state: TaskState = Field(..., description="COMPLETED, CURRENT, or PENDING")
+    state: TaskState = Field(..., description="COMPLETED, CURRENT, PENDING, or FAILED")
     is_injected: bool = Field(
         ...,
         description="True if this task was dynamically injected (not part of the default flow)"
     )
+    
+
+
+class OutcomeInfo(BaseModel):
+    """Structured rejection outcome, present only when a candidate is REJECTED."""
+    failed_at_task: str = Field(..., description="Task ID that triggered rejection")
+    reason: str = Field(..., description="Human-readable rejection reason")
 
 
 class UserFlowResponse(BaseModel):
@@ -175,10 +184,16 @@ class UserFlowResponse(BaseModel):
     user_id: str = Field(..., description="The unique User ID")
     status: Status = Field(..., description="Overall admission status")
     total_tasks: int = Field(..., description="Total task count in this user's personalized path")
+    current_task_number: int = Field(..., description="1-based index of the user's current position in the flow")
+    outcome: Optional[OutcomeInfo] = Field(
+        default=None,
+        description="Populated only for REJECTED users — identifies the failing task and reason"
+    )
     tasks: List[PersonalizedTaskItem] = Field(
         ...,
         description="Ordered personalized task sequence with state annotations"
     )
+
 
 
 class FlowDefinitionResponse(BaseModel):

@@ -4,7 +4,7 @@ FastAPI route definitions for the Admissions Engine REST API.
 
 # Third-Party
 from fastapi import APIRouter, Depends, HTTPException, status
-from typing import Dict, Any
+from typing import Dict
 from uuid import UUID
 
 # Local Application — Domain & Config
@@ -18,8 +18,6 @@ from app.models.schemas import (
     TaskCompleteRequest,
     FlowDefinitionResponse,
     ProgressInfo,
-    TaskState,
-    PersonalizedTaskItem,
     UserFlowResponse,
 )
 
@@ -30,6 +28,7 @@ from app.services.admissions import (
     process_task_completion,
     get_user_flow,
     build_personalized_task_sequence,
+    build_user_flow_data,
     UserNotFoundError,
     EmailAlreadyExistsError,
     WorkflowStateError,
@@ -169,34 +168,15 @@ def get_user_personalized_flow(
     except UserNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
 
-    # Determine the anchor task for state assignment
-    if user.is_terminated():
-        anchor_task = user.last_completed_task
-    else:
-        anchor_task = user.current_task
-
-    # Walk the sequence and assign states
-    tasks: list[PersonalizedTaskItem] = []
-    found_anchor = False
-    for task_id in task_sequence:
-        if task_id == anchor_task:
-            state = TaskState.COMPLETED if user.is_terminated() else TaskState.CURRENT
-            found_anchor = True
-        elif not found_anchor:
-            state = TaskState.COMPLETED
-        else:
-            state = TaskState.COMPLETED if user.status == Status.ACCEPTED else TaskState.PENDING
-        tasks.append(PersonalizedTaskItem(
-            task_id=task_id,
-            state=state,
-            is_injected=task_id in user.custom_flow
-        ))
+    tasks, current_task_number, outcome = build_user_flow_data(user, task_sequence, flow)
 
     return UserFlowResponse(
         user_id=user.id,
         status=user.status,
         total_tasks=len(task_sequence),
-        tasks=tasks
+        current_task_number=current_task_number,
+        tasks=tasks,
+        outcome=outcome,
     )
 
 
