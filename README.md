@@ -55,7 +55,11 @@ This is where the reviewer should start to verify the API's core logic.
 * **Zero-Manual Sync:** All examples are generated dynamically from `flow_config.json` at startup. If a pass-condition or a schema changes in the JSON, the documentation updates itself instantly. It covers every edge case (e.g., IQ scores > 75, 60–75, < 60) and task type
 
 > **🎬 Watch a brief walkthrough demonstrating how the dynamic Cheat Sheet allows for testing the entire 9-task funnel in seconds:**
-> https://github.com/user-attachments/assets/1c76335f-5caf-470b-9e53-6136863a3d8c
+
+
+
+https://github.com/user-attachments/assets/f5fa49eb-ed0c-4bc4-a05e-88b9e8e16882
+
 
 
 ### Level 2: API Explorer CLI — `make run-explorer`
