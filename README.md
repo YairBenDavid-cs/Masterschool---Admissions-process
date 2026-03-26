@@ -68,6 +68,15 @@ An interactive terminal menu driven by `questionary` that allows for rapid manua
 * **JIT Schema Discovery:** The CLI provides **Just-In-Time (JIT)** hints for the current task’s schema, pulling the contract directly from the API response.
 * **Full Transparency:** Provides immediate visibility into the **Response Body** and clear **Error Messages** (400/422/404) returned by the server. It is the best tool to verify transition rules and payload validations in seconds.
 
+> **🎬 Experience the JIT (Just-In-Time) schema discovery and real-time validation feedback in this terminal session recording:**
+
+
+
+https://github.com/user-attachments/assets/f07ebca8-bd7f-4d94-acbe-4ab28313df77
+
+
+
+
 ### Level 3: Candidate Portal — `make run-portal`
 **The Reference Implementation & UI Simulation.**
 A Streamlit-powered wizard (`http://localhost:8501`) that demonstrates how the API's **HATEOAS-based logic** is translated into a functional user experience.
