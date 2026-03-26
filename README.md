@@ -83,6 +83,14 @@ A Streamlit-powered wizard (`http://localhost:8501`) that demonstrates how the A
 * **The "Dumb Client" Architecture:** The portal has zero hardcoded knowledge of the admissions steps. It is a pure consumer that discovers the progress bar state, step labels, and payload schemas exclusively from the API's `_links` and `current_task_schema`.
 * **Payload Insight:** For verification, the UI displays the exact JSON payload being sent in each step, serving as a live integration guide for any frontend consumer.
 
+> **🎬 Visualize how a HATEOAS-driven, "Dumb Client" dynamically discovers and renders the entire applicant journey based solely on API responses:**
+
+
+
+https://github.com/user-attachments/assets/11758637-1327-443e-b73a-933592c9c753
+
+
+
 > **💡 Flexibility Verification:** All three tools are 100% synchronized via `flow_config.json`. To test the system's true dynamic nature, modify a step name, change a pass-condition score, or add a task in the JSON file. Upon restart, the Swagger examples, CLI menus, and Portal progress bar will **instantly adapt**, proving our "Discovery & HATEOAS" architecture works flawlessly across any interface.
 
 ## 3. Quick Start
@@ -169,7 +177,6 @@ Every response includes a full HATEOAS payload: the `step_name`, `task_name`, `c
 | `GET`  | `/api/v1/users/{user_id}/status` | Admission status: `IN_PROGRESS`, `ACCEPTED`, or `REJECTED` |
 
 Full interactive documentation with request/response schemas: `http://localhost:8000/docs`
-ReDoc: `http://localhost:8000/redoc`
 
 ---
 
