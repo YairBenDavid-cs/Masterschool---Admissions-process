@@ -1,6 +1,5 @@
 # Masterschool Admissions Engine
 
-![CI](https://github.com/YairBendavid/Masterschool---Admissions-process/actions/workflows/ci.yml/badge.svg)
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green)
 
