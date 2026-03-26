@@ -52,7 +52,11 @@ The entire DX ecosystem — API, visual portal, and CLI explorer — runs **insi
 **The Primary Evaluation Interface.**
 This is where the reviewer should start to verify the API's core logic. 
 * **Dynamic Cheat Sheet:** Features a custom-styled, collapsible "Read This First" panel with **9 copy-pasteable task payloads**. 
-* **Zero-Manual Sync:** All examples are generated dynamically from `flow_config.json` at startup. If a pass-condition or a schema changes in the JSON, the documentation updates itself instantly. It covers every edge case (e.g., IQ scores > 75, 60–75, < 60) and task type.
+* **Zero-Manual Sync:** All examples are generated dynamically from `flow_config.json` at startup. If a pass-condition or a schema changes in the JSON, the documentation updates itself instantly. It covers every edge case (e.g., IQ scores > 75, 60–75, < 60) and task type
+
+> **🎬 Watch a brief walkthrough demonstrating how the dynamic Cheat Sheet allows for testing the entire 9-task funnel in seconds:**
+> [Watch Swagger UI Demo](https://github.com/user-attachments/assets/1c76335f-5caf-470b-9e53-6136863a3d8c)
+
 
 ### Level 2: API Explorer CLI — `make run-explorer`
 **The Power-User Sandbox & Debugger.**
