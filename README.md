@@ -25,9 +25,9 @@ Masterschool Admissions Engine is a **Metadata-Driven Finite State Machine** tha
 The central design challenge of this assignment is **PM flexibility**: product managers must be able to iterate on the admissions funnel—adding steps, changing thresholds, or reordering tasks—without a single line of engineering involvement. 
 
 ### From Hardcoded Logic to a Directed Graph (FSM)
-Most traditional systems fall into the "Hardcoding Trap," where business rules are buried inside nested `if-else` blocks and switch statements. **AdmissionsOS** rejects this approach. Instead, we treat the admissions funnel as a **Metadata-Driven Directed Graph (Finite State Machine)**.
+Most traditional systems fall into the "Hardcoding Trap," where business rules are buried inside nested `if-else` blocks and switch statements. **Masterschool Admissions Engine** rejects this approach. Instead, we treat the admissions funnel as a **Metadata-Driven Directed Graph (Finite State Machine)**.
 
-* **The Config is the Map:** `flow_config.json` defines the "Nodes" (Steps and Tasks) and the "Edges" (Transitions/Conditions) of the graph.
+* **The Config is the Map:** `flow_config.json` defines the "Nodes" (Tasks) and the "Edges" (Transitions/Conditions) of the graph.
 * **The Code is the Engine:** The Python application contains zero business rules. It is a pure execution engine that traverses the graph based on real-time metadata. 
 
 By decoupling the **Execution Engine** from the **Business Logic**, we achieve a system where the flow can be completely redesigned simply by updating the graph's configuration. No `if-else` refactoring, no code changes, and no risk of breaking core logic during a business pivot.
@@ -58,7 +58,7 @@ This is where the reviewer should start to verify the API's core logic.
 **The Power-User Sandbox & Debugger.**
 An interactive terminal menu driven by `questionary` that allows for rapid manual testing and inspection of the Finite State Machine (FSM).
 * **JIT Schema Discovery:** The CLI provides **Just-In-Time (JIT)** hints for the current task’s schema, pulling the contract directly from the API response.
-* **Full Transparency:** Provides immediate visibility into the **Response Body** and clear **Error Messages** (400/422/403) returned by the server. It is the best tool to verify transition rules and payload validations in seconds.
+* **Full Transparency:** Provides immediate visibility into the **Response Body** and clear **Error Messages** (400/422/404) returned by the server. It is the best tool to verify transition rules and payload validations in seconds.
 
 ### Level 3: Candidate Portal — `make run-portal`
 **The Reference Implementation & UI Simulation.**
